@@ -277,8 +277,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   </div>
   <div class="sidebar-content">
     <button class="sidebar-save-top" id="saveBtnTop">💾 Save & Apply</button>
-    <textarea id="instructionsText"></textarea>
+    <textarea id="instructionsText" placeholder="name: Scenario&#10;voice: shimmer&#10;&#10;&lt;BACKBONE&gt;&#10;Global rules for every phase...&#10;&lt;/BACKBONE&gt;&#10;&#10;===PHASE===&#10;duration: 3&#10;instructions: Current phase..."></textarea>
     <div class="instructions-info">
+      <code>&lt;BACKBONE&gt;...&lt;/BACKBONE&gt;</code> global rules for every phase (one block maximum)<br>
       <code>===PHASE===</code> separator &nbsp;|&nbsp; <code>temperature:</code> &nbsp;|&nbsp; <code>duration:</code> N responses &nbsp;|&nbsp; <code>nudge:</code> trigger &nbsp;|&nbsp; <code>instructions:</code> (last field)<br>
       Special nudge: <code>final message</code> → auto-disconnect
     </div>
@@ -361,10 +362,11 @@ const PERFORMANCE_SCENARIOS=[
 // PHASE HELPERS
 // ═══════════════════════════════════
 let performancePhases=[], currentPhaseIndex=0, currentPhaseResponseCount=0;
-let aiResponseCount=0, isFinalMessageSent=false, currentScenarioFileText='';
+let aiResponseCount=0, isFinalMessageSent=false, currentScenarioFileText='', currentBackbone='';
 
 function parsePhasesText(text){
-  const blocks=text.split('===PHASE===').map(b=>b.trim()).filter(b=>b.length>0);
+  const parts=text.split('===PHASE===');
+  const blocks=(parts.length>1?parts.slice(1):parts).map(b=>b.trim()).filter(b=>b.length>0);
   return blocks.map(block=>{
     const tempM=block.match(/^temperature:\s*([\d.]+)/im);
     const durM=block.match(/^duration:\s*(\d+)/im);
@@ -378,10 +380,20 @@ function parsePhasesText(text){
     };
   });
 }
+function extractBackbone(text){
+  const opens=text.match(/<BACKBONE>/gi)||[];
+  const closes=text.match(/<\/BACKBONE>/gi)||[];
+  if(opens.length!==closes.length)throw new Error('BACKBONE must have both <BACKBONE> and </BACKBONE> tags');
+  if(opens.length>1)throw new Error('Only one <BACKBONE> block is allowed per scenario');
+  if(opens.length===0)return{backbone:'',phaseText:text};
+  const match=text.match(/<BACKBONE>([\s\S]*?)<\/BACKBONE>/i);
+  return{backbone:match[1].trim(),phaseText:text.replace(match[0],'').trim()};
+}
 function parseScenarioFile(text){
   const nameM=text.match(/^name:\s*(.+)/m);
   const voiceM=text.match(/^voice:\s*(.+)/m);
-  return{name:nameM?nameM[1].trim():null,voice:voiceM?voiceM[1].trim():null,phases:parsePhasesText(text)};
+  const extracted=extractBackbone(text);
+  return{name:nameM?nameM[1].trim():null,voice:voiceM?voiceM[1].trim():null,backbone:extracted.backbone,phases:parsePhasesText(extracted.phaseText)};
 }
 function makeFallbackPhases(s){
   return[{temperature:0.9,duration:999,nudge:null,instructions:s.instructions}];
@@ -394,13 +406,19 @@ function loadScenarioFile(idx){
   const fallback=PERFORMANCE_SCENARIOS[idx];
   const stored=loadScenarioFromStorage(idx);
   if(stored){
-    const parsed=parseScenarioFile(stored);
-    currentScenarioFileText=stored;
-    performancePhases=parsed.phases.length>0?parsed.phases:makeFallbackPhases(fallback);
-    if(parsed.name) PERFORMANCE_SCENARIOS[idx].name=parsed.name;
-    if(parsed.voice){PERFORMANCE_SCENARIOS[idx].voice=parsed.voice;voiceSelect.value=parsed.voice;}
+    try{
+      const parsed=parseScenarioFile(stored);
+      currentScenarioFileText=stored;currentBackbone=parsed.backbone;
+      performancePhases=parsed.phases.length>0?parsed.phases:makeFallbackPhases(fallback);
+      if(parsed.name) PERFORMANCE_SCENARIOS[idx].name=parsed.name;
+      if(parsed.voice){PERFORMANCE_SCENARIOS[idx].voice=parsed.voice;voiceSelect.value=parsed.voice;}
+    }catch(error){
+      console.error('Invalid stored scenario:',error);
+      currentScenarioFileText=makeFallbackText(fallback);currentBackbone='';performancePhases=makeFallbackPhases(fallback);
+    }
   } else {
     currentScenarioFileText=makeFallbackText(fallback);
+    currentBackbone='';
     performancePhases=makeFallbackPhases(fallback);
   }
   currentPhaseIndex=0;currentPhaseResponseCount=0;aiResponseCount=0;isFinalMessageSent=false;
@@ -410,13 +428,18 @@ function loadScenarioFile(idx){
 
 function updatePhaseIndicator(){
   const n=performancePhases.length;
-  phaseLabel.textContent=n>0?'Phase '+(currentPhaseIndex+1)+'/'+n:'Phase —';
+  phaseLabel.textContent=n>0?'Phase '+(currentPhaseIndex+1)+'/'+n+(currentBackbone?' • Backbone':''):'Phase —';
   phaseIndicator.innerHTML='';
   for(let i=0;i<n;i++){
     const d=document.createElement('div');
     d.className='phase-dot'+(i<currentPhaseIndex?' done':'')+(i===currentPhaseIndex?' active':'');
     phaseIndicator.appendChild(d);
   }
+}
+
+function composeInstructions(phaseInstructions){
+  if(!currentBackbone)return phaseInstructions||'';
+  return '<BACKBONE>\n'+currentBackbone+'\n</BACKBONE>\n\nThe BACKBONE contains global rules for the entire experience. It applies during every phase and overrides conflicting phase instructions.\n\n<CURRENT_PHASE>\n'+(phaseInstructions||'')+'\n</CURRENT_PHASE>';
 }
 
 function makeRealtimeSessionUpdate({instructions,voice,includeVoice=false}){
@@ -453,7 +476,7 @@ function switchToNextPhase(){
     addMessage('nudge','🎭 Phase '+(currentPhaseIndex+1)+' nudge: '+phase.nudge);
   }
   if(ws&&ws.readyState===WebSocket.OPEN){
-    ws.send(JSON.stringify(makeRealtimeSessionUpdate({instructions:phase.instructions,voice:null,includeVoice:false})));
+    ws.send(JSON.stringify(makeRealtimeSessionUpdate({instructions:composeInstructions(phase.instructions),voice:null,includeVoice:false})));
   }
   updatePhaseIndicator();
 }
@@ -648,7 +671,7 @@ async function connectRealtime(){
       startNewSession();currentPhaseIndex=0;currentPhaseResponseCount=0;aiResponseCount=0;isFinalMessageSent=false;
       updatePhaseIndicator();
       const phase=performancePhases.length>0?performancePhases[0]:{instructions:s.instructions,temperature:0.9};
-      realtimeSocket.send(JSON.stringify(makeRealtimeSessionUpdate({instructions:phase.instructions,voice:s.voice,includeVoice:true})));
+      realtimeSocket.send(JSON.stringify(makeRealtimeSessionUpdate({instructions:composeInstructions(phase.instructions),voice:s.voice,includeVoice:true})));
       setOverlayState('connected');
       syncEditorConnectBtns();
       setTimeout(()=>startRecording(),800);
@@ -826,15 +849,16 @@ function closeSidebar(){sidebarOverlay.classList.remove('active');sidebarEditor.
 function doSave(){
   const txt=instructionsText.value.trim();
   if(txt.length<20){alert('Too short');return;}
-  const parsed=parseScenarioFile(txt);
+  let parsed;
+  try{parsed=parseScenarioFile(txt);}catch(error){alert(error.message);return;}
   if(parsed.phases.length===0){alert('No ===PHASE=== blocks found');return;}
-  currentScenarioFileText=txt;performancePhases=parsed.phases;
+  currentScenarioFileText=txt;currentBackbone=parsed.backbone;performancePhases=parsed.phases;
   if(parsed.voice){PERFORMANCE_SCENARIOS[currentScenarioIndex].voice=parsed.voice;voiceSelect.value=parsed.voice;}
   if(parsed.name)PERFORMANCE_SCENARIOS[currentScenarioIndex].name=parsed.name;
   currentPhaseIndex=0;currentPhaseResponseCount=0;
   updatePhaseIndicator();updateScenarioDisplay();
   saveScenarioToStorage(currentScenarioIndex,txt);
-  addMessage('assistant','<strong>💾 Saved</strong> — '+parsed.phases.length+' phases. Reconnect to apply.');
+  addMessage('assistant','<strong>💾 Saved</strong> — '+parsed.phases.length+' phases | Backbone: '+(currentBackbone?'active':'none')+'. Reconnect to apply.');
 }
 
 editScenarioBtn.addEventListener('click',openSidebar);
@@ -867,6 +891,7 @@ document.getElementById('resetBtn').addEventListener('click',()=>{
   if(!confirm('Reset to built-in fallback?'))return;
   const s=PERFORMANCE_SCENARIOS[currentScenarioIndex];
   currentScenarioFileText=makeFallbackText(s);
+  currentBackbone='';
   performancePhases=makeFallbackPhases(s);
   instructionsText.value=currentScenarioFileText;
   currentPhaseIndex=0;currentPhaseResponseCount=0;updatePhaseIndicator();
