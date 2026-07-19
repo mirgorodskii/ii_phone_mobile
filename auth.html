@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenAI Auth Widget</title>
+</head>
+<body>
+<script>
+const BACKEND_URL='https://iiopenai-auth-production-64f4.up.railway.app';
+const params=new URLSearchParams(location.search);
+let config={
+  project:params.get('project')||'the-phone',
+  voice:params.get('voice')||'shimmer',
+  maxDuration:Number(params.get('maxDuration')||600000),
+  model:params.get('model')||'gpt-realtime-2.1'
+};
+
+function postToParent(type,data){
+  window.parent.postMessage({source:'openai-auth-widget',type,data},'*');
+}
+
+async function requestEphemeralKey(){
+  try{
+    const response=await fetch(BACKEND_URL+'/session',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(config)
+    });
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.error||('HTTP '+response.status));
+    postToParent('key-received',{
+      ephemeralKey:data.ephemeralKey,
+      expiresAt:data.expiresAt,
+      maxDuration:data.maxDuration,
+      voice:data.voice,
+      project:data.project,
+      model:data.model,
+      rateLimit:data.rateLimit,
+      meta:data._meta||null
+    });
+  }catch(error){
+    postToParent('error',{message:error.message,code:error.code||'UNKNOWN_ERROR'});
+  }
+}
+
+window.addEventListener('message',event=>{
+  const msg=event.data;
+  if(!msg||msg.source!=='openai-auth-parent'||msg.type!=='request-key')return;
+  if(msg.config)config={...config,...msg.config};
+  requestEphemeralKey();
+});
+
+postToParent('widget-ready',{project:config.project});
+</script>
+</body>
+</html>

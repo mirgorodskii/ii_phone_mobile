@@ -150,10 +150,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   <button class="main-overlay-btn" id="mainOverlayBtn">CONNECT</button>
   <div class="overlay-status" id="overlayStatus">Ready</div>
   <button class="overlay-disconnect-btn" id="overlayDisconnectBtn">DISCONNECT</button>
-  <div class="api-key-area">
-    <input class="api-key-input" id="directApiKeyInput" type="password" placeholder="sk-... (direct key)">
-    <button class="api-key-btn" id="saveApiKeyBtn">USE</button>
-  </div>
 </div>
 
 <!-- UNDER-OVERLAY -->
@@ -177,7 +173,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <button class="scenario-btn" data-scenario="8">Artist</button>
   </div>
 
-  <iframe id="openai-auth-widget" src="auth.html?project=the-phone&voice=shimmer&maxDuration=600000" style="display:none"></iframe>
+  <iframe id="openai-auth-widget" src="auth.html?project=the-phone&voice=shimmer&maxDuration=600000&model=gpt-realtime-2.1" style="display:none"></iframe>
 
   <div class="instructions-section">
     <button class="edit-scenario-btn" id="editScenarioBtn">⚙️ Edit Scenario Phases</button>
@@ -198,6 +194,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
           <option value="verse">Verse</option>
           <option value="cedar">Cedar ✦</option>
           <option value="marin">Marin ✦</option>
+        </select>
+        <label>Model:</label>
+        <select id="modelSelect">
+          <option value="gpt-realtime-2.1" selected>Realtime 2.1</option>
+          <option value="gpt-realtime-2.1-mini">Realtime 2.1 Mini</option>
+          <option value="gpt-realtime-2">Realtime 2</option>
+          <option value="gpt-realtime-1.5">Realtime 1.5</option>
+          <option value="gpt-realtime-mini">Realtime Mini</option>
+          <option value="gpt-realtime">Realtime</option>
         </select>
       </div>
       <div style="text-align:center;flex:1">
@@ -326,11 +331,11 @@ class OpenAIAuthManager {
       });
     });
   }
-  requestKey(voice,maxDuration){
+  requestKey(voice,maxDuration,model=REALTIME_MODEL){
     return new Promise((resolve,reject)=>{
       if(!this.ready){reject(new Error('Widget not ready'));return;}
       this.onKeyReceived=resolve; this.onError=reject;
-      this.iframe.contentWindow.postMessage({source:'openai-auth-parent',type:'request-key',config:{voice,maxDuration}},'*');
+      this.iframe.contentWindow.postMessage({source:'openai-auth-parent',type:'request-key',config:{voice,maxDuration,model}},'*');
     });
   }
 }
@@ -414,6 +419,30 @@ function updatePhaseIndicator(){
   }
 }
 
+function makeRealtimeSessionUpdate({instructions,voice,includeVoice=false}){
+  const session={
+    type:'realtime',
+    instructions:instructions||'',
+    output_modalities:['audio'],
+    audio:{
+      input:{
+        format:{type:'audio/pcm',rate:24000},
+        turn_detection:{
+          type:'server_vad',
+          threshold:vadThreshold,
+          prefix_padding_ms:300,
+          silence_duration_ms:vadSilenceDuration,
+          create_response:true,
+          interrupt_response:true
+        }
+      },
+      output:{format:{type:'audio/pcm',rate:24000}}
+    }
+  };
+  if(includeVoice&&voice)session.audio.output.voice=voice;
+  return{type:'session.update',session};
+}
+
 function switchToNextPhase(){
   if(currentPhaseIndex>=performancePhases.length-1) return;
   currentPhaseIndex++;currentPhaseResponseCount=0;
@@ -424,7 +453,7 @@ function switchToNextPhase(){
     addMessage('nudge','🎭 Phase '+(currentPhaseIndex+1)+' nudge: '+phase.nudge);
   }
   if(ws&&ws.readyState===WebSocket.OPEN){
-    ws.send(JSON.stringify({type:'session.update',session:{modalities:['text','audio'],voice:voiceSelect.value,instructions:phase.instructions,temperature:phase.temperature,input_audio_format:'pcm16',output_audio_format:'pcm16',turn_detection:{type:'server_vad',threshold:vadThreshold,prefix_padding_ms:300,silence_duration_ms:vadSilenceDuration}}}));
+    ws.send(JSON.stringify(makeRealtimeSessionUpdate({instructions:phase.instructions,voice:null,includeVoice:false})));
   }
   updatePhaseIndicator();
 }
@@ -466,6 +495,7 @@ function switchToNextScenario(){
 // ═══════════════════════════════════
 // CORE STATE
 // ═══════════════════════════════════
+let REALTIME_MODEL='gpt-realtime-2.1';
 let ws=null, isConnected=false;
 let audioContext=null,playbackAudioContext=null,telephoneFilter=null;
 let currentText='',currentMessageDiv=null;
@@ -474,7 +504,6 @@ let mediaStream=null,audioWorkletNode=null,isRecording=false;
 let isAISpeaking=false,isAudioPlaying=false,isFirstInteraction=true,isSpeechActive=false;
 let vadThreshold=0.99,vadSilenceDuration=1200,speechGateThreshold=0.05,noiseGateThreshold=0.05;
 let conversationLog=[],currentSessionStartTime=null;
-let directApiKey='';
 
 // ═══════════════════════════════════
 // DOM REFS
@@ -485,6 +514,7 @@ const sendBtn=document.getElementById('sendBtn');
 const statusText=document.getElementById('statusText');
 const statusIndicator=document.getElementById('statusIndicator');
 const voiceSelect=document.getElementById('voiceSelect');
+const modelSelect=document.getElementById('modelSelect');
 const audioIndicator=document.getElementById('audioIndicator');
 const goOnBtn=document.getElementById('goOnBtn');
 const scenarioInfo=document.getElementById('scenarioInfo');
@@ -503,8 +533,6 @@ const overlayScenarioSelect=document.getElementById('overlayScenarioSelect');
 const overlayDisconnectBtn=document.getElementById('overlayDisconnectBtn');
 const devBtn=document.getElementById('devBtn');
 const showOverlayBtn=document.getElementById('showOverlayBtn');
-const directApiKeyInput=document.getElementById('directApiKeyInput');
-const saveApiKeyBtn=document.getElementById('saveApiKeyBtn');
 const downloadLogBtn=document.getElementById('downloadLogBtn');
 const audioLevelDisplay=document.getElementById('audioLevelDisplay');
 const audioLevelValue=document.getElementById('audioLevelValue');
@@ -548,37 +576,13 @@ function setOverlayState(state){
 }
 
 // ═══════════════════════════════════
-// API KEY (localStorage)
-// ═══════════════════════════════════
-try{directApiKey=localStorage.getItem('the_phone_api_key')||'';}catch(e){}
-if(directApiKey){directApiKeyInput.value='••••••••••••••••';saveApiKeyBtn.textContent='✓ SET';saveApiKeyBtn.style.color='rgba(255,255,255,0.7)';saveApiKeyBtn.style.borderColor='rgba(255,255,255,0.4)';}
-
-saveApiKeyBtn.addEventListener('click',()=>{
-  const val=directApiKeyInput.value.trim();
-  if(val.startsWith('sk-')){
-    directApiKey=val;
-    try{localStorage.setItem('the_phone_api_key',val);}catch(e){}
-    saveApiKeyBtn.textContent='✓ SET';saveApiKeyBtn.style.color='rgba(255,255,255,0.7)';saveApiKeyBtn.style.borderColor='rgba(255,255,255,0.4)';
-    directApiKeyInput.value='••••••••••••••••';
-  } else if(val===''||val==='••••••••••••••••'){
-    directApiKey='';
-    try{localStorage.removeItem('the_phone_api_key');}catch(e){}
-    saveApiKeyBtn.textContent='USE';saveApiKeyBtn.style.color='';saveApiKeyBtn.style.borderColor='';
-    directApiKeyInput.value='';
-  } else {
-    directApiKeyInput.style.borderBottomColor='rgba(255,80,80,0.6)';
-    setTimeout(()=>directApiKeyInput.style.borderBottomColor='',1500);
-  }
-});
-directApiKeyInput.addEventListener('focus',()=>{if(directApiKeyInput.value==='••••••••••••••••')directApiKeyInput.value=directApiKey;});
-directApiKeyInput.addEventListener('blur',()=>{if(directApiKey&&directApiKeyInput.value===directApiKey)directApiKeyInput.value='••••••••••••••••';});
-
-// ═══════════════════════════════════
 // INIT
 // ═══════════════════════════════════
 window.addEventListener('load',async()=>{
   if(isScenarioLocked) lockScenarioBtn.textContent='🔒 Locked';
   overlayScenarioSelect.value=currentScenarioIndex+'';
+  try{REALTIME_MODEL=localStorage.getItem('realtimeModel')||REALTIME_MODEL;}catch(e){}
+  if([...modelSelect.options].some(option=>option.value===REALTIME_MODEL))modelSelect.value=REALTIME_MODEL;
   updateScenarioDisplay();updateScenarioBtns();
   loadScenarioFile(currentScenarioIndex);
   try{await authManager._initPromise;}catch(e){addMessage('assistant','<strong>⚠️ Auth Error:</strong> '+e.message);}
@@ -615,9 +619,8 @@ downloadLogBtn.addEventListener('click',()=>{
 // GET EPHEMERAL KEY
 // ═══════════════════════════════════
 async function getEphemeralKey(voice){
-  if(directApiKey&&directApiKey.startsWith('sk-')) return directApiKey;
-  try{const d=await authManager.requestKey(voice,600000);return d.ephemeralKey;}
-  catch(e){setOverlayState('idle');alert('Failed to get key:\n'+e.message+'\n\nTip: paste sk-... key in the field below CONNECT.');return null;}
+  try{return await authManager.requestKey(voice,600000,REALTIME_MODEL);}
+  catch(e){setOverlayState('idle');alert('Failed to get secure key:\n'+e.message);return null;}
 }
 
 // ═══════════════════════════════════
@@ -626,38 +629,47 @@ async function getEphemeralKey(voice){
 async function connectRealtime(){
   const s=PERFORMANCE_SCENARIOS[currentScenarioIndex];
   setOverlayState('connecting');
-  const key=await getEphemeralKey(s.voice);
-  if(!key){setOverlayState('idle');return;}
+  const auth=await getEphemeralKey(s.voice);
+  if(!auth){setOverlayState('idle');return;}
+  const key=auth.ephemeralKey;
+  const sessionModel=auth.model||REALTIME_MODEL;
   try{
     updateStatus('Connecting...',false);
-    ws=new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5',['realtime','openai-insecure-api-key.'+key,'openai-beta.realtime-v1']);
-    ws.onopen=()=>{
+    const realtimeSocket=new WebSocket(
+      'wss://api.openai.com/v1/realtime?model='+encodeURIComponent(sessionModel),
+      ['realtime','openai-insecure-api-key.'+key]
+    );
+    ws=realtimeSocket;
+    realtimeSocket.onopen=()=>{
+      if(ws!==realtimeSocket){realtimeSocket.close();return;}
       isConnected=true;updateStatus('Connected',true);
       messageInput.disabled=false;messageInput.placeholder='Enter message...';
       sendBtn.disabled=false;goOnBtn.disabled=false;downloadLogBtn.style.display='none';
       startNewSession();currentPhaseIndex=0;currentPhaseResponseCount=0;aiResponseCount=0;isFinalMessageSent=false;
       updatePhaseIndicator();
       const phase=performancePhases.length>0?performancePhases[0]:{instructions:s.instructions,temperature:0.9};
-      ws.send(JSON.stringify({type:'session.update',session:{modalities:['text','audio'],voice:s.voice,instructions:phase.instructions,temperature:phase.temperature,input_audio_format:'pcm16',output_audio_format:'pcm16',turn_detection:{type:'server_vad',threshold:vadThreshold,prefix_padding_ms:300,silence_duration_ms:vadSilenceDuration}}}));
+      realtimeSocket.send(JSON.stringify(makeRealtimeSessionUpdate({instructions:phase.instructions,voice:s.voice,includeVoice:true})));
       setOverlayState('connected');
       syncEditorConnectBtns();
       setTimeout(()=>startRecording(),800);
     };
-    ws.onmessage=async(event)=>{
+    realtimeSocket.onmessage=async(event)=>{
+      if(ws!==realtimeSocket)return;
       try{
         const data=JSON.parse(event.data);
-        if(data.type==='response.audio_transcript.delta'){
-          currentText+=data.delta;
+        if(data.type==='response.audio_transcript.delta'||data.type==='response.output_audio_transcript.delta'){
+          currentText+=data.delta||'';
           if(!currentMessageDiv)currentMessageDiv=addMessage('assistant',currentText);
           else if(!ws._txTimeout){ws._txTimeout=setTimeout(()=>{updateMessage(currentMessageDiv,currentText);ws._txTimeout=null;},50);}
         }else if(data.type==='input_audio_buffer.speech_started'){
           if(!currentMessageDiv)currentMessageDiv=addMessage('user','🎤');
         }else if(data.type==='input_audio_buffer.speech_stopped'){
           isSpeechActive=false;
-        }else if(data.type==='conversation.item.input_audio_transcription.completed'){
-          if(currentMessageDiv&&currentMessageDiv.classList.contains('user')){updateMessage(currentMessageDiv,data.transcript);logMessage('user',data.transcript);}
+        }else if(data.type==='conversation.item.input_audio_transcription.completed'||data.type==='input_audio_buffer.transcription.completed'){
+          const transcript=data.transcript||data.text||'';
+          if(currentMessageDiv&&currentMessageDiv.classList.contains('user')){updateMessage(currentMessageDiv,transcript);logMessage('user',transcript);}
           currentMessageDiv=null;isSpeechActive=false;
-        }else if(data.type==='response.audio.delta'){
+        }else if(data.type==='response.audio.delta'||data.type==='response.output_audio.delta'){
           if(!isAISpeaking){isAISpeaking=true;isSpeechActive=false;}
           isAudioPlaying=true;setOverlayState('speaking');
           updateStatus('AI speaking',true);audioIndicator.classList.remove('hidden');
@@ -670,8 +682,9 @@ async function connectRealtime(){
         }else if(data.type==='error'){console.error('WS error:',data.error);updateStatus('Error: '+data.error.message,false);}
       }catch(e){console.error('onmessage error:',e);}
     };
-    ws.onerror=()=>{updateStatus('Connection error',false);setOverlayState('idle');};
-    ws.onclose=()=>{
+    realtimeSocket.onerror=()=>{if(ws!==realtimeSocket)return;updateStatus('Connection error',false);setOverlayState('idle');};
+    realtimeSocket.onclose=()=>{
+      if(ws&&ws!==realtimeSocket)return;
       isConnected=false;updateStatus('Disconnected',false);
       messageInput.disabled=true;messageInput.placeholder='Connect first...';
       sendBtn.disabled=true;goOnBtn.disabled=true;
@@ -725,10 +738,11 @@ function sendMessage(){
   const text=messageInput.value.trim();if(!text||!isConnected)return;
   isFirstInteraction=false;addMessage('user',text);logMessage('user',text);messageInput.value='';
   ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text}]}}));
-  ws.send(JSON.stringify({type:'response.create',response:{modalities:['text','audio']}}));
+  ws.send(JSON.stringify({type:'response.create',response:{output_modalities:['audio']}}));
 }
 function disconnect(){
-  if(ws)ws.close();stopRecording();
+  const closingSocket=ws;ws=null;isConnected=false;
+  if(closingSocket)closingSocket.close();stopRecording();
   isFirstInteraction=true;isAISpeaking=false;isAudioPlaying=false;isSpeechActive=false;
   scheduledSourceNodes.forEach(n=>{try{n.stop()}catch(e){}});
   scheduledSourceNodes=[];audioQueue=[];isPlaying=false;audioPlaybackStartTime=0;
@@ -744,7 +758,7 @@ async function startRecording(){
   if(isFirstInteraction){
     isFirstInteraction=false;isAISpeaking=true;setOverlayState('speaking');updateStatus('Waiting for INTRO...',true);
     ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text:'BEGIN'}]}}));
-    ws.send(JSON.stringify({type:'response.create',response:{modalities:['text','audio']}}));
+    ws.send(JSON.stringify({type:'response.create',response:{output_modalities:['audio']}}));
     await new Promise(r=>setTimeout(r,500));
   }
   try{
@@ -783,7 +797,7 @@ async function startRecording(){
 function stopRecording(){
   if(isRecording){isRecording=false;audioLevelDisplay.style.display='none';isSpeechActive=false;}
   if(audioWorkletNode){try{audioWorkletNode.disconnect()}catch(e){}audioWorkletNode=null;}
-  mediaStream=null;
+  if(mediaStream){mediaStream.getTracks().forEach(track=>track.stop());mediaStream=null;}
 }
 function calcRMS(data){let s=0;for(let i=0;i<data.length;i++)s+=data[i]*data[i];return Math.sqrt(s/data.length);}
 function arrayBufferToBase64(buf){const bytes=new Uint8Array(buf);let bin='';for(let i=0;i<bytes.length;i++)bin+=String.fromCharCode(bytes[i]);return btoa(bin);}
@@ -835,6 +849,12 @@ const editorDisconnectBtn=document.getElementById('editorDisconnectBtn');
 editorConnectBtn.addEventListener('click',()=>connectRealtime());
 editorDisconnectBtn.addEventListener('click',()=>disconnect());
 
+modelSelect.addEventListener('change',()=>{
+  if(isConnected){modelSelect.value=REALTIME_MODEL;alert('Disconnect before changing the model.');return;}
+  REALTIME_MODEL=modelSelect.value;
+  try{localStorage.setItem('realtimeModel',REALTIME_MODEL);}catch(e){}
+});
+
 // Keep editor connect/disconnect in sync with connection state
 function syncEditorConnectBtns(){
   editorConnectBtn.style.display = isConnected ? 'none' : 'block';
@@ -880,7 +900,7 @@ messageInput.addEventListener('keypress',e=>{if(e.key==='Enter'&&isConnected)sen
 goOnBtn.addEventListener('click',()=>{
   if(!isConnected)return;
   ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text:'continue'}]}}));
-  ws.send(JSON.stringify({type:'response.create',response:{modalities:['text','audio']}}));
+  ws.send(JSON.stringify({type:'response.create',response:{output_modalities:['audio']}}));
 });
 document.getElementById('scenarioButtons').addEventListener('click',async e=>{
   const btn=e.target.closest('.scenario-btn');if(!btn)return;
