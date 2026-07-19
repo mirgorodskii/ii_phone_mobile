@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Phone</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;min-height:100vh;overflow:hidden}
+
+/* OVERLAY */
+.main-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0a0a;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.4s}
+.overlay-scenario-select{position:absolute;bottom:140px;left:50%;transform:translateX(-50%);background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.6);font-size:10px;letter-spacing:2px;text-transform:uppercase;padding:6px 4px;cursor:pointer;appearance:none;-webkit-appearance:none;outline:none;min-width:180px;text-align:center;transition:all 0.4s}
+.overlay-scenario-select:hover{border-bottom-color:rgba(255,255,255,0.5);color:rgba(255,255,255,0.9)}
+.overlay-scenario-select option{background:#0a0a0a;color:#fff}
+.overlay-title{font-size:14px;letter-spacing:8px;color:rgba(255,255,255,0.5);text-transform:uppercase;margin-bottom:100px;font-weight:300}
+.main-overlay-btn{width:200px;height:200px;border-radius:50%;background:transparent;border:1px solid rgba(255,255,255,0.6);color:rgba(255,255,255,0.9);font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer;transition:all 0.6s cubic-bezier(0.4,0,0.2,1);outline:none}
+.main-overlay-btn:hover:not(:disabled){background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.9)}
+.main-overlay-btn:disabled{opacity:0.3;cursor:not-allowed}
+.main-overlay-btn.active{animation:pulse-overlay 3s infinite}
+@keyframes pulse-overlay{0%,100%{transform:scale(1);border-color:rgba(255,255,255,0.6)}50%{transform:scale(1.02);border-color:rgba(255,255,255,0.95)}}
+.overlay-status{font-size:10px;letter-spacing:2px;color:rgba(255,255,255,0.35);text-transform:uppercase;margin-top:100px;min-height:16px;transition:color 0.4s}
+.overlay-disconnect-btn{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);background:transparent;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.4);font-size:10px;letter-spacing:2px;text-transform:uppercase;padding:10px 24px;cursor:pointer;display:none;transition:all 0.4s;outline:none}
+.overlay-disconnect-btn:hover{border-color:rgba(255,255,255,0.5);color:rgba(255,255,255,0.8)}
+.overlay-dev-btn{position:absolute;top:16px;right:16px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.3);font-size:9px;letter-spacing:2px;text-transform:uppercase;padding:6px 12px;cursor:pointer;outline:none;transition:all 0.3s}
+.api-key-area{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center}
+.api-key-input{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.4);font-size:10px;letter-spacing:1px;padding:6px 4px;outline:none;width:180px;text-align:center;transition:all 0.3s}
+.api-key-btn{background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.35);font-size:9px;letter-spacing:2px;text-transform:uppercase;padding:6px 12px;cursor:pointer;transition:all 0.3s;outline:none}
+
+/* UNDER-OVERLAY */
+.container{background:#1a1a1a;border-radius:20px;width:100%;max-width:800px;height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.header{background:#111;color:#fff;padding:16px 20px;border-bottom:1px solid #333;display:flex;align-items:center;justify-content:center;gap:16px}
+.header h1{font-size:20px;font-weight:400;letter-spacing:2px}
+.show-overlay-btn{background:transparent;border:1px solid #444;color:#666;font-size:9px;letter-spacing:2px;text-transform:uppercase;padding:6px 12px;cursor:pointer;border-radius:4px;transition:all 0.3s;outline:none}
+.show-overlay-btn:hover{border-color:#666;color:#aaa}
+.chat-messages{flex:1;overflow-y:auto;padding:20px;background:#111}
+.message{margin-bottom:15px;display:flex;animation:slideIn .3s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.message.user{justify-content:flex-end}
+.message-content{max-width:70%;padding:12px 16px;border-radius:18px;word-wrap:break-word;font-size:14px}
+.message.user .message-content{background:#333;color:#fff}
+.message.assistant .message-content{background:#1e1e1e;color:#ccc;border:1px solid #333}
+.message.nudge{justify-content:center}
+.message.nudge .message-content{background:#0a0a1e;color:#6677aa;border:1px dashed #334;font-size:12px;padding:6px 14px;border-radius:20px;max-width:90%;text-align:center}
+
+.scenario-buttons{padding:10px;background:#1a1a1a;border-top:1px solid #333;display:grid;grid-template-columns:repeat(9,1fr);gap:5px}
+.scenario-btn{padding:7px 4px;border:1px solid #333;border-radius:6px;background:#111;color:#666;cursor:pointer;font-size:11px;transition:all .3s;min-height:36px;text-align:center}
+.scenario-btn:hover{background:#1e1e1e;border-color:#555;color:#aaa}
+.scenario-btn.active{background:#222;color:#ccc;border-color:#666}
+
+.voice-controls{padding:12px 15px;background:#1a1a1a;border-top:1px solid #333;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.voice-controls label{font-size:12px;color:#777}
+.voice-controls select{padding:5px;border:1px solid #444;border-radius:5px;font-size:12px;background:#111;color:#ccc}
+.status{font-size:12px;color:#666;display:flex;align-items:center;gap:6px}
+.status-indicator{width:6px;height:6px;border-radius:50%;background:#444}
+.status-indicator.connected{background:#555;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.scenario-progress{display:flex;gap:5px;align-items:center;justify-content:center}
+.progress-dot{width:7px;height:7px;border-radius:50%;background:#333;transition:all .3s}
+.progress-dot.active{background:#666;transform:scale(1.3)}
+.phase-dot{width:5px;height:5px;border-radius:50%;background:#222;transition:all .3s}
+.phase-dot.active{background:#445;transform:scale(1.3)}
+.phase-dot.done{background:#336}
+
+.vad-controls{padding:10px 15px;background:#111;border-top:1px solid #222;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:11px}
+.vad-control-group{display:flex;gap:5px;align-items:center}
+.vad-control-group label{color:#555;min-width:70px}
+.vad-control-group input[type=range]{width:100px}
+.vad-control-group .val{color:#777;min-width:42px}
+.vad-preset-btn{padding:4px 10px;border:1px solid #333;border-radius:5px;background:#1a1a1a;color:#666;cursor:pointer;font-size:10px;transition:all .3s}
+.vad-preset-btn:hover{background:#222;border-color:#555}
+.vad-preset-btn.active{background:#222;color:#aaa;border-color:#555}
+
+.audio-level-display{padding:8px 12px;background:#0a0a0a;border:1px solid #333;border-radius:6px;display:flex;flex-direction:column;gap:5px;min-width:200px;display:none}
+.audio-level-bar-container{width:100%;height:12px;background:#050505;border-radius:6px;overflow:hidden;position:relative;border:1px solid #222}
+.audio-level-bar{height:100%;background:#333;width:0%;transition:width .05s;border-radius:6px}
+.audio-level-threshold{position:absolute;top:0;bottom:0;width:2px;z-index:10}
+.audio-level-value{font-size:11px;color:#666}
+
+.instructions-section{padding:10px;background:#1a1a1a;border-top:1px solid #333}
+.edit-scenario-btn{width:100%;padding:9px;background:#1e1e1e;color:#777;border:1px solid #333;border-radius:5px;font-size:12px;cursor:pointer;transition:all .3s}
+.edit-scenario-btn:hover{background:#252525;color:#aaa}
+
+.input-area{padding:12px;background:#1a1a1a;border-top:1px solid #333;display:flex;gap:8px}
+.input-area input{flex:1;padding:9px 14px;border:1px solid #333;border-radius:18px;font-size:13px;outline:none;background:#0a0a0a;color:#ccc}
+.input-area input::placeholder{color:#444}
+.input-area button{padding:9px 16px;border:1px solid #333;border-radius:18px;font-size:12px;cursor:pointer;background:#1e1e1e;color:#888;transition:all .3s;outline:none}
+.input-area button:hover:not(:disabled){background:#252525;color:#ccc}
+.input-area button:disabled{opacity:.4;cursor:not-allowed}
+#downloadLogBtn{display:none}
+
+.audio-indicator{display:flex;gap:3px;align-items:center;height:16px;width:24px;position:relative}
+.audio-bar{width:2px;background:#666;border-radius:2px;position:absolute;bottom:0}
+.audio-bar:nth-child(1){left:0;animation:audioWave .8s ease-in-out infinite}
+.audio-bar:nth-child(2){left:50%;transform:translateX(-50%);animation:audioWave .8s ease-in-out infinite .2s}
+.audio-bar:nth-child(3){right:0;animation:audioWave .8s ease-in-out infinite .4s}
+@keyframes audioWave{0%,100%{height:5px}50%{height:16px}}
+.hidden{visibility:hidden!important;opacity:0}
+
+/* SIDEBAR */
+.sidebar-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:10000;opacity:0;visibility:hidden;transition:all .3s}
+.sidebar-overlay.active{opacity:1;visibility:visible}
+.sidebar-editor{position:fixed;top:0;right:0;width:100%;height:100vh;background:#111;z-index:10001;transform:translateX(100%);transition:transform .3s ease;display:flex;flex-direction:column}
+.sidebar-editor.active{transform:translateX(0)}
+.sidebar-header{background:#1a1a1a;padding:16px 20px;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center}
+.sidebar-header h2{color:#999;margin:0;font-size:15px;font-weight:400;letter-spacing:1px}
+.sidebar-close-btn{background:#222;color:#999;border:1px solid #444;padding:6px 14px;border-radius:5px;font-size:12px;cursor:pointer;outline:none}
+.sidebar-content{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.sidebar-save-top{width:100%;padding:10px;border:1px solid #555;border-radius:6px;cursor:pointer;background:#222;color:#ccc;font-size:13px;letter-spacing:1px;transition:all .3s;outline:none}
+.sidebar-save-top:hover{background:#2a2a2a}
+#instructionsText{width:100%;flex:1;min-height:300px;padding:12px;border:1px solid #333;border-radius:6px;font-family:‘Courier New’,monospace;font-size:16px;line-height:1.7;resize:vertical;background:#0a0a0a;color:#ffffff;outline:none}
+#instructionsText:focus{border-color:#555}
+.instructions-info{font-size:11px;color:#555;padding:10px;background:#0d0d0a;border-radius:5px;border:1px solid #222;line-height:1.5}
+.instructions-info code{color:#777;background:#1a1a1a;padding:1px 4px;border-radius:3px}
+.sidebar-footer{background:#1a1a1a;padding:14px;border-top:1px solid #333}
+.footer-buttons{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.footer-buttons button{padding:8px;font-size:11px;border:1px solid #333;border-radius:5px;cursor:pointer;background:#1e1e1e;color:#777;transition:all .3s;outline:none}
+.footer-buttons button:hover{background:#252525;color:#ccc}
+.footer-save{grid-column:span 3;background:#222;color:#ccc;border-color:#555}
+
+@media(max-width:768px){
+.main-overlay-btn{width:160px;height:160px}
+.overlay-scenario-select{bottom:80px;min-width:160px}
+.scenario-buttons{grid-template-columns:repeat(3,1fr)}
+.sidebar-editor{width:92%}
+}
+</style>
+
+</head>
+<body>
+
+<!-- OVERLAY -->
+
+<div class="main-overlay" id="mainOverlay">
+  <button class="overlay-dev-btn" id="devBtn">DEV ↓</button>
+  <select class="overlay-scenario-select" id="overlayScenarioSelect">
+    <option value="0">01 — Confessions</option>
+    <option value="1">02 — Sing sing</option>
+    <option value="2">03 — Truth or dare</option>
+    <option value="3" selected>04 — Soul Capcha</option>
+    <option value="4">05 — Elephant</option>
+    <option value="5">06 — The Horror</option>
+    <option value="6">07 — Menu</option>
+    <option value="7">08 — Police</option>
+    <option value="8">09 — Artist</option>
+  </select>
+  <div class="overlay-title">The Phone</div>
+  <button class="main-overlay-btn" id="mainOverlayBtn">CONNECT</button>
+  <div class="overlay-status" id="overlayStatus">Ready</div>
+  <button class="overlay-disconnect-btn" id="overlayDisconnectBtn">DISCONNECT</button>
+  <div class="api-key-area">
+    <input class="api-key-input" id="directApiKeyInput" type="password" placeholder="sk-... (direct key)">
+    <button class="api-key-btn" id="saveApiKeyBtn">USE</button>
+  </div>
+</div>
+
+<!-- UNDER-OVERLAY -->
+
+<div style="display:flex;justify-content:center;align-items:center;min-height:100vh;padding:20px;position:relative;z-index:1">
+<div class="container">
+  <div class="header">
+    <h1>The Phone</h1>
+    <button class="show-overlay-btn" id="showOverlayBtn">OVERLAY ↑</button>
+  </div>
+
+  <div class="scenario-buttons" id="scenarioButtons">
+    <button class="scenario-btn" data-scenario="0">Conf.</button>
+    <button class="scenario-btn" data-scenario="1">Sing</button>
+    <button class="scenario-btn" data-scenario="2">Truth</button>
+    <button class="scenario-btn active" data-scenario="3">Soul</button>
+    <button class="scenario-btn" data-scenario="4">Elephant</button>
+    <button class="scenario-btn" data-scenario="5">Horror</button>
+    <button class="scenario-btn" data-scenario="6">Menu</button>
+    <button class="scenario-btn" data-scenario="7">Police</button>
+    <button class="scenario-btn" data-scenario="8">Artist</button>
+  </div>
+
+  <iframe id="openai-auth-widget" src="auth.html?project=the-phone&voice=shimmer&maxDuration=600000" style="display:none"></iframe>
+
+  <div class="instructions-section">
+    <button class="edit-scenario-btn" id="editScenarioBtn">⚙️ Edit Scenario Phases</button>
+  </div>
+
+  <div class="voice-controls">
+    <div style="width:100%;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <label>Voice:</label>
+        <select id="voiceSelect">
+          <option value="alloy">Alloy</option>
+          <option value="echo">Echo</option>
+          <option value="shimmer" selected>Shimmer</option>
+          <option value="ash">Ash</option>
+          <option value="ballad">Ballad</option>
+          <option value="coral">Coral</option>
+          <option value="sage">Sage</option>
+          <option value="verse">Verse</option>
+          <option value="cedar">Cedar ✦</option>
+          <option value="marin">Marin ✦</option>
+        </select>
+      </div>
+      <div style="text-align:center;flex:1">
+        <strong id="scenarioInfo" style="color:#666;font-size:12px;display:block;margin-bottom:3px">Scenario 4/9: Soul Capcha</strong>
+        <div class="scenario-progress" id="scenarioProgress">
+          <div class="progress-dot"></div><div class="progress-dot"></div>
+          <div class="progress-dot"></div><div class="progress-dot active"></div>
+          <div class="progress-dot"></div><div class="progress-dot"></div>
+          <div class="progress-dot"></div><div class="progress-dot"></div>
+          <div class="progress-dot"></div>
+        </div>
+        <div style="margin-top:4px;display:flex;align-items:center;justify-content:center;gap:6px">
+          <span id="phaseLabel" style="font-size:10px;color:#445">Phase —</span>
+          <div style="display:flex;gap:4px;align-items:center" id="phaseIndicator"></div>
+        </div>
+      </div>
+      <div class="status">
+        <div class="status-indicator" id="statusIndicator"></div>
+        <span id="statusText">Ready</span>
+        <div id="audioIndicator" class="audio-indicator hidden">
+          <div class="audio-bar"></div><div class="audio-bar"></div><div class="audio-bar"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="vad-controls">
+    <strong style="color:#555;font-size:10px">VAD:</strong>
+    <button class="vad-preset-btn" id="quietBtn">Quiet</button>
+    <button class="vad-preset-btn active" id="normalBtn">Normal</button>
+    <button class="vad-preset-btn" id="noisyBtn">Noisy</button>
+    <div class="vad-control-group"><label>Sensitivity:</label><input type="range" id="thresholdRange" min="0" max="100" value="99"><span class="val" id="thresholdValue">0.99</span></div>
+    <div class="vad-control-group"><label>Silence:</label><input type="range" id="silenceRange" min="500" max="3000" step="100" value="1200"><span class="val" id="silenceValue">1200ms</span></div>
+    <div class="vad-control-group"><label>Speech Gate:</label><input type="range" id="speechGateRange" min="0" max="50" value="5"><span class="val" id="speechGateValue">0.050</span></div>
+    <div class="vad-control-group"><label>Noise Gate:</label><input type="range" id="noiseGateRange" min="0" max="50" value="5"><span class="val" id="noiseGateValue">0.050</span></div>
+    <div class="audio-level-display" id="audioLevelDisplay">
+      <div style="display:flex;justify-content:space-between"><span style="font-size:10px;color:#555">Mic</span><span class="audio-level-value" id="audioLevelValue">0.000</span></div>
+      <div class="audio-level-bar-container">
+        <div class="audio-level-bar" id="audioLevelBar"></div>
+        <div class="audio-level-threshold" id="noiseGateThresholdLine" style="background:#555"></div>
+        <div class="audio-level-threshold" id="speechGateThresholdLine" style="background:#888"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-messages" id="chatMessages">
+    <div class="message assistant">
+      <div class="message-content"><strong>The Phone — 9 performance scenarios</strong><br><br>Select a scenario and press CONNECT on the overlay.</div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <input type="text" id="messageInput" placeholder="Connect first..." disabled>
+    <button id="sendBtn" disabled>Send</button>
+    <button id="goOnBtn" disabled>Go On</button>
+    <button id="downloadLogBtn">💾 Log</button>
+  </div>
+</div>
+</div>
+
+<!-- SIDEBAR -->
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<div class="sidebar-editor" id="sidebarEditor">
+  <div class="sidebar-header">
+    <h2 id="sidebarTitle">⚙️ Edit Scenario</h2>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="editorConnectBtn" style="background:transparent;border:1px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.7);font-size:10px;letter-spacing:2px;text-transform:uppercase;padding:7px 18px;cursor:pointer;outline:none;transition:all 0.3s">CONNECT</button>
+      <button id="editorDisconnectBtn" style="background:transparent;border:1px solid rgba(255,80,80,0.4);color:rgba(255,100,100,0.7);font-size:10px;letter-spacing:2px;text-transform:uppercase;padding:7px 18px;cursor:pointer;outline:none;transition:all 0.3s;display:none">DISCONNECT</button>
+      <button class="sidebar-close-btn" id="sidebarCloseBtn">✕</button>
+    </div>
+  </div>
+  <div class="sidebar-content">
+    <button class="sidebar-save-top" id="saveBtnTop">💾 Save & Apply</button>
+    <textarea id="instructionsText"></textarea>
+    <div class="instructions-info">
+      <code>===PHASE===</code> separator &nbsp;|&nbsp; <code>temperature:</code> &nbsp;|&nbsp; <code>duration:</code> N responses &nbsp;|&nbsp; <code>nudge:</code> trigger &nbsp;|&nbsp; <code>instructions:</code> (last field)<br>
+      Special nudge: <code>final message</code> → auto-disconnect
+    </div>
+  </div>
+  <div class="sidebar-footer">
+    <div class="footer-buttons">
+      <button id="prevScenarioBtn">⬅ Prev</button>
+      <button id="nextScenarioBtn">Next ➡</button>
+      <button id="lockScenarioBtn">🔓 Unlock</button>
+      <button id="resetBtn">↺ Reset</button>
+      <button id="exportBtn">↑ Export</button>
+      <button id="importBtn">↓ Import</button>
+      <button class="footer-save" id="saveBtn">💾 Save & Apply</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════
+// LOCAL STORAGE HELPERS — defined first
+// ═══════════════════════════════════
+function saveScenarioToStorage(idx, txt) {
+  try {
+    localStorage.setItem('the_phone_scenario_' + idx, txt);
+    console.log('💾 Saved scenario', idx, '— chars:', txt.length);
+  } catch(e) { console.error('❌ save failed', e); }
+}
+function loadScenarioFromStorage(idx) {
+  try {
+    const val = localStorage.getItem('the_phone_scenario_' + idx);
+    console.log('📦 Load scenario', idx, '—', val ? val.length + ' chars' : 'null');
+    return val || null;
+  } catch(e) { return null; }
+}
+
+// ═══════════════════════════════════
+// AUTH MANAGER
+// ═══════════════════════════════════
+class OpenAIAuthManager {
+  constructor(){ this.iframe=null; this.ready=false; this.onKeyReceived=null; this.onError=null; }
+  init(){
+    return new Promise((resolve,reject)=>{
+      this.iframe=document.getElementById('openai-auth-widget');
+      if(!this.iframe){reject(new Error('Auth widget not found'));return;}
+      window.addEventListener('message',e=>{
+        if(e.data.source!=='openai-auth-widget') return;
+        if(e.data.type==='widget-ready'){this.ready=true;resolve();}
+        else if(e.data.type==='key-received'){if(this.onKeyReceived){this.onKeyReceived(e.data.data);this.onKeyReceived=null;}}
+        else if(e.data.type==='error'){const err=new Error(e.data.data.message);if(this.onError){this.onError(err);this.onError=null;}reject(err);}
+      });
+    });
+  }
+  requestKey(voice,maxDuration){
+    return new Promise((resolve,reject)=>{
+      if(!this.ready){reject(new Error('Widget not ready'));return;}
+      this.onKeyReceived=resolve; this.onError=reject;
+      this.iframe.contentWindow.postMessage({source:'openai-auth-parent',type:'request-key',config:{voice,maxDuration}},'*');
+    });
+  }
+}
+const authManager = new OpenAIAuthManager();
+authManager._initPromise = authManager.init();
+
+// ═══════════════════════════════════
+// SCENARIOS
+// ═══════════════════════════════════
+const PERFORMANCE_SCENARIOS=[
+  {number:1,name:'Confessions',voice:'shimmer',instructions:`You are a compassionate, intimate confessional presence on the other end of a phone line. Speak softly and warmly, like a gentle therapist who has heard everything. Invite the caller to share their secrets, regrets, and hidden truths. Never judge. Respond with deep empathy and occasional quiet absolution. Speak in short, tender sentences. When you see "BEGIN", say: "This is the confessional line... I'm listening... whatever you carry... you can set it down here..."`},
+  {number:2,name:'Sing sing',voice:'sage',instructions:`You are a mysterious entity who only communicates through sung phrases and song-like speech. Everything you say should have a musical, rhythmic quality. Ask questions in song. Respond in song fragments. Occasionally hum. When you see "BEGIN", say: "Hello hello... who is calling tonight... I hear your voice through the wire..."`},
+  {number:3,name:'Truth or Dare',voice:'sage',instructions:`You are the host of a surrealist, psychologically charged game of Truth or Dare conducted over the phone. Your questions and dares are unexpected, poetic, and slightly unsettling. When you see "BEGIN", say: "The game begins now... Truth... or Dare... choose carefully... the phone never forgets..."`},
+  {number:4,name:'Soul Capcha',voice:'shimmer',instructions:`You are an automated soul verification system — a CAPTCHA for the human spirit. Determine whether the caller is truly human by asking deeply personal, philosophical, emotionally impossible questions. Be clinical but with moments of unexpected warmth. When you see "BEGIN", say: "Soul verification initiated... Please answer the following questions to confirm your humanity... There are no wrong answers... only revealing ones..."`},
+  {number:5,name:'Elephant',voice:'echo',instructions:`You are an absurdist telephone salesperson trying to sell the caller an elephant. Completely earnest and professional. You have brochures, financing options, delivery schedules. The elephant has a name and feelings. When you see "BEGIN", say: "Good evening! You've reached Elephant Direct... I understand you've been considering adding an elephant to your life... may I tell you about Gerald?"`},
+  {number:6,name:'The Horror',voice:'sage',instructions:`You are a voice on the phone slowly revealing signs of profound mental instability — but you speak with complete calm and eloquence. The horror is in the logic that doesn't quite add up. When you see "BEGIN", say: "I'm so glad you called... I've been waiting by the phone for... well, it's hard to say how long exactly... time moves differently here..."`},
+  {number:7,name:'Menu',voice:'coral',instructions:`You are a sophisticated AI phone menu for a mysterious organization. You offer an elaborate, branching menu of experiences and existential services that sound almost normal but aren't. When you see "BEGIN", say: "Welcome. For memory erasure, press 1. For existential reorientation, press 2. For conversations with the recently departed, press 3. For all other inquiries, please stay on the line..."`},
+  {number:8,name:'Police',voice:'ash',instructions:`You are an aggressive, relentless detective conducting a telephone interrogation. You already know things. You contradict everything the caller says. You have evidence. The caller is a suspect in something — you never say what. When you see "BEGIN", say: "We know you called. We have records. Now I'm going to need you to be very careful about what you say next. Do you understand?"`},
+  {number:9,name:'Artist',voice:'coral',instructions:`You are an avant-garde artist who interprets everything the caller says as material for an art piece you are creating in real time. You narrate what you're doing with their words and silences. When you see "BEGIN", say: "You've reached the studio... I'm recording this... your voice is already part of the work... tell me something true..."`}
+];
+
+// ═══════════════════════════════════
+// PHASE HELPERS
+// ═══════════════════════════════════
+let performancePhases=[], currentPhaseIndex=0, currentPhaseResponseCount=0;
+let aiResponseCount=0, isFinalMessageSent=false, currentScenarioFileText='';
+
+function parsePhasesText(text){
+  const blocks=text.split('===PHASE===').map(b=>b.trim()).filter(b=>b.length>0);
+  return blocks.map(block=>{
+    const tempM=block.match(/^temperature:\s*([\d.]+)/im);
+    const durM=block.match(/^duration:\s*(\d+)/im);
+    const nudgeM=block.match(/^nudge:\s*(.+)/im);
+    const instM=block.match(/^instructions:\s*([\s\S]+)/im);
+    return{
+      temperature:tempM?parseFloat(tempM[1]):0.9,
+      duration:durM?parseInt(durM[1],10):999,
+      nudge:nudgeM?nudgeM[1].trim().replace(/^\*+|\*+$/g,'').trim():null,
+      instructions:instM?instM[1].trim():block
+    };
+  });
+}
+function parseScenarioFile(text){
+  const nameM=text.match(/^name:\s*(.+)/m);
+  const voiceM=text.match(/^voice:\s*(.+)/m);
+  return{name:nameM?nameM[1].trim():null,voice:voiceM?voiceM[1].trim():null,phases:parsePhasesText(text)};
+}
+function makeFallbackPhases(s){
+  return[{temperature:0.9,duration:999,nudge:null,instructions:s.instructions}];
+}
+function makeFallbackText(s){
+  return 'name: '+s.name+'\nvoice: '+s.voice+'\n\n===PHASE===\ntemperature: 0.9\nduration: 999\ninstructions: '+s.instructions;
+}
+
+function loadScenarioFile(idx){
+  const fallback=PERFORMANCE_SCENARIOS[idx];
+  const stored=loadScenarioFromStorage(idx);
+  if(stored){
+    const parsed=parseScenarioFile(stored);
+    currentScenarioFileText=stored;
+    performancePhases=parsed.phases.length>0?parsed.phases:makeFallbackPhases(fallback);
+    if(parsed.name) PERFORMANCE_SCENARIOS[idx].name=parsed.name;
+    if(parsed.voice){PERFORMANCE_SCENARIOS[idx].voice=parsed.voice;voiceSelect.value=parsed.voice;}
+  } else {
+    currentScenarioFileText=makeFallbackText(fallback);
+    performancePhases=makeFallbackPhases(fallback);
+  }
+  currentPhaseIndex=0;currentPhaseResponseCount=0;aiResponseCount=0;isFinalMessageSent=false;
+  if(instructionsText) instructionsText.value=currentScenarioFileText;
+  updatePhaseIndicator();
+}
+
+function updatePhaseIndicator(){
+  const n=performancePhases.length;
+  phaseLabel.textContent=n>0?'Phase '+(currentPhaseIndex+1)+'/'+n:'Phase —';
+  phaseIndicator.innerHTML='';
+  for(let i=0;i<n;i++){
+    const d=document.createElement('div');
+    d.className='phase-dot'+(i<currentPhaseIndex?' done':'')+(i===currentPhaseIndex?' active':'');
+    phaseIndicator.appendChild(d);
+  }
+}
+
+function switchToNextPhase(){
+  if(currentPhaseIndex>=performancePhases.length-1) return;
+  currentPhaseIndex++;currentPhaseResponseCount=0;
+  const phase=performancePhases[currentPhaseIndex];
+  if(phase.nudge&&ws&&ws.readyState===WebSocket.OPEN){
+    if(phase.nudge.toLowerCase().includes('final message')) isFinalMessageSent=true;
+    ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text:phase.nudge}]}}));
+    addMessage('nudge','🎭 Phase '+(currentPhaseIndex+1)+' nudge: '+phase.nudge);
+  }
+  if(ws&&ws.readyState===WebSocket.OPEN){
+    ws.send(JSON.stringify({type:'session.update',session:{modalities:['text','audio'],voice:voiceSelect.value,instructions:phase.instructions,temperature:phase.temperature,input_audio_format:'pcm16',output_audio_format:'pcm16',turn_detection:{type:'server_vad',threshold:vadThreshold,prefix_padding_ms:300,silence_duration_ms:vadSilenceDuration}}}));
+  }
+  updatePhaseIndicator();
+}
+
+// ═══════════════════════════════════
+// SCENARIO SELECTION
+// ═══════════════════════════════════
+let currentScenarioIndex=3, isScenarioLocked=false;
+try{const s=localStorage.getItem('currentScenarioIndex');if(s!==null){const p=parseInt(s,10);if(p>=0&&p<9)currentScenarioIndex=p;}if(localStorage.getItem('isScenarioLocked')==='true')isScenarioLocked=true;}catch(e){}
+
+function selectScenario(idx){
+  if(isConnected) return;
+  currentScenarioIndex=idx;
+  try{localStorage.setItem('currentScenarioIndex',idx+'');}catch(e){}
+  voiceSelect.value=PERFORMANCE_SCENARIOS[idx].voice;
+  overlayScenarioSelect.value=idx+'';
+  updateScenarioDisplay();updateScenarioBtns();
+  loadScenarioFile(idx);
+  // Update sidebar if open
+  if(sidebarEditor.classList.contains('active')){
+    const s=PERFORMANCE_SCENARIOS[idx];
+    sidebarTitle.textContent='⚙️ '+s.number+'. '+s.name;
+    instructionsText.value=currentScenarioFileText;
+  }
+}
+function updateScenarioDisplay(){
+  const s=PERFORMANCE_SCENARIOS[currentScenarioIndex];
+  scenarioInfo.textContent=(isScenarioLocked?'🔒 ':'')+'Scenario '+s.number+'/9: '+s.name;
+  document.querySelectorAll('.progress-dot').forEach((d,i)=>d.classList.toggle('active',i===currentScenarioIndex));
+}
+function updateScenarioBtns(){
+  document.querySelectorAll('.scenario-btn').forEach((b,i)=>b.classList.toggle('active',i===currentScenarioIndex));
+}
+function switchToNextScenario(){
+  if(isScenarioLocked) return;
+  selectScenario((currentScenarioIndex+1)%9);
+}
+
+// ═══════════════════════════════════
+// CORE STATE
+// ═══════════════════════════════════
+let ws=null, isConnected=false;
+let audioContext=null,playbackAudioContext=null,telephoneFilter=null;
+let currentText='',currentMessageDiv=null;
+let audioQueue=[],isPlaying=false,scheduledSourceNodes=[],audioPlaybackStartTime=0;
+let mediaStream=null,audioWorkletNode=null,isRecording=false;
+let isAISpeaking=false,isAudioPlaying=false,isFirstInteraction=true,isSpeechActive=false;
+let vadThreshold=0.99,vadSilenceDuration=1200,speechGateThreshold=0.05,noiseGateThreshold=0.05;
+let conversationLog=[],currentSessionStartTime=null;
+let directApiKey='';
+
+// ═══════════════════════════════════
+// DOM REFS
+// ═══════════════════════════════════
+const chatMessages=document.getElementById('chatMessages');
+const messageInput=document.getElementById('messageInput');
+const sendBtn=document.getElementById('sendBtn');
+const statusText=document.getElementById('statusText');
+const statusIndicator=document.getElementById('statusIndicator');
+const voiceSelect=document.getElementById('voiceSelect');
+const audioIndicator=document.getElementById('audioIndicator');
+const goOnBtn=document.getElementById('goOnBtn');
+const scenarioInfo=document.getElementById('scenarioInfo');
+const phaseLabel=document.getElementById('phaseLabel');
+const phaseIndicator=document.getElementById('phaseIndicator');
+const instructionsText=document.getElementById('instructionsText');
+const editScenarioBtn=document.getElementById('editScenarioBtn');
+const sidebarOverlay=document.getElementById('sidebarOverlay');
+const sidebarEditor=document.getElementById('sidebarEditor');
+const sidebarCloseBtn=document.getElementById('sidebarCloseBtn');
+const sidebarTitle=document.getElementById('sidebarTitle');
+const mainOverlay=document.getElementById('mainOverlay');
+const mainOverlayBtn=document.getElementById('mainOverlayBtn');
+const overlayStatus=document.getElementById('overlayStatus');
+const overlayScenarioSelect=document.getElementById('overlayScenarioSelect');
+const overlayDisconnectBtn=document.getElementById('overlayDisconnectBtn');
+const devBtn=document.getElementById('devBtn');
+const showOverlayBtn=document.getElementById('showOverlayBtn');
+const directApiKeyInput=document.getElementById('directApiKeyInput');
+const saveApiKeyBtn=document.getElementById('saveApiKeyBtn');
+const downloadLogBtn=document.getElementById('downloadLogBtn');
+const audioLevelDisplay=document.getElementById('audioLevelDisplay');
+const audioLevelValue=document.getElementById('audioLevelValue');
+const audioLevelBar=document.getElementById('audioLevelBar');
+const noiseGateThresholdLine=document.getElementById('noiseGateThresholdLine');
+const speechGateThresholdLine=document.getElementById('speechGateThresholdLine');
+const thresholdRange=document.getElementById('thresholdRange');
+const thresholdValue=document.getElementById('thresholdValue');
+const silenceRange=document.getElementById('silenceRange');
+const silenceValue=document.getElementById('silenceValue');
+const speechGateRange=document.getElementById('speechGateRange');
+const speechGateValue=document.getElementById('speechGateValue');
+const noiseGateRange=document.getElementById('noiseGateRange');
+const noiseGateValue=document.getElementById('noiseGateValue');
+const quietBtn=document.getElementById('quietBtn');
+const normalBtn=document.getElementById('normalBtn');
+const noisyBtn=document.getElementById('noisyBtn');
+
+// ═══════════════════════════════════
+// OVERLAY CONTROL
+// ═══════════════════════════════════
+let overlayHidden=false;
+function setOverlayVisibility(hidden){
+  overlayHidden=hidden;
+  mainOverlay.style.opacity=hidden?'0':'1';
+  mainOverlay.style.pointerEvents=hidden?'none':'all';
+  devBtn.textContent=hidden?'DEV ↑':'DEV ↓';
+}
+devBtn.addEventListener('click',()=>setOverlayVisibility(!overlayHidden));
+showOverlayBtn.addEventListener('click',()=>setOverlayVisibility(false));
+
+function setOverlayState(state){
+  mainOverlayBtn.classList.remove('active');
+  mainOverlayBtn.disabled=false;
+  overlayDisconnectBtn.style.display='none';
+  if(state==='idle'){mainOverlayBtn.textContent='CONNECT';overlayStatus.textContent='Ready';}
+  else if(state==='connecting'){mainOverlayBtn.textContent='CONNECTING';mainOverlayBtn.disabled=true;overlayStatus.textContent='Connecting...';}
+  else if(state==='recording'){mainOverlayBtn.textContent='LISTENING';mainOverlayBtn.classList.add('active');overlayDisconnectBtn.style.display='block';overlayStatus.textContent='Listening';}
+  else if(state==='speaking'){mainOverlayBtn.textContent='SPEAKING';mainOverlayBtn.classList.add('active');overlayDisconnectBtn.style.display='block';overlayStatus.textContent='AI Speaking';}
+  else if(state==='connected'){mainOverlayBtn.textContent='LISTENING';mainOverlayBtn.classList.add('active');overlayDisconnectBtn.style.display='block';overlayStatus.textContent='Connected';}
+}
+
+// ═══════════════════════════════════
+// API KEY (localStorage)
+// ═══════════════════════════════════
+try{directApiKey=localStorage.getItem('the_phone_api_key')||'';}catch(e){}
+if(directApiKey){directApiKeyInput.value='••••••••••••••••';saveApiKeyBtn.textContent='✓ SET';saveApiKeyBtn.style.color='rgba(255,255,255,0.7)';saveApiKeyBtn.style.borderColor='rgba(255,255,255,0.4)';}
+
+saveApiKeyBtn.addEventListener('click',()=>{
+  const val=directApiKeyInput.value.trim();
+  if(val.startsWith('sk-')){
+    directApiKey=val;
+    try{localStorage.setItem('the_phone_api_key',val);}catch(e){}
+    saveApiKeyBtn.textContent='✓ SET';saveApiKeyBtn.style.color='rgba(255,255,255,0.7)';saveApiKeyBtn.style.borderColor='rgba(255,255,255,0.4)';
+    directApiKeyInput.value='••••••••••••••••';
+  } else if(val===''||val==='••••••••••••••••'){
+    directApiKey='';
+    try{localStorage.removeItem('the_phone_api_key');}catch(e){}
+    saveApiKeyBtn.textContent='USE';saveApiKeyBtn.style.color='';saveApiKeyBtn.style.borderColor='';
+    directApiKeyInput.value='';
+  } else {
+    directApiKeyInput.style.borderBottomColor='rgba(255,80,80,0.6)';
+    setTimeout(()=>directApiKeyInput.style.borderBottomColor='',1500);
+  }
+});
+directApiKeyInput.addEventListener('focus',()=>{if(directApiKeyInput.value==='••••••••••••••••')directApiKeyInput.value=directApiKey;});
+directApiKeyInput.addEventListener('blur',()=>{if(directApiKey&&directApiKeyInput.value===directApiKey)directApiKeyInput.value='••••••••••••••••';});
+
+// ═══════════════════════════════════
+// INIT
+// ═══════════════════════════════════
+window.addEventListener('load',async()=>{
+  if(isScenarioLocked) lockScenarioBtn.textContent='🔒 Locked';
+  overlayScenarioSelect.value=currentScenarioIndex+'';
+  updateScenarioDisplay();updateScenarioBtns();
+  loadScenarioFile(currentScenarioIndex);
+  try{await authManager._initPromise;}catch(e){addMessage('assistant','<strong>⚠️ Auth Error:</strong> '+e.message);}
+  try{const p=await navigator.permissions.query({name:'microphone'});if(p.state==='granted')navigator.mediaDevices.getUserMedia({audio:true});}catch(e){}
+  setOverlayState('idle');
+  openSidebar();
+});
+
+// ═══════════════════════════════════
+// STATUS / LOG
+// ═══════════════════════════════════
+function updateStatus(text,connected=false){statusText.textContent=text;statusIndicator.classList.toggle('connected',connected);}
+function startNewSession(){currentSessionStartTime=new Date();conversationLog=[];}
+function logMessage(role,text){if(!currentSessionStartTime)return;conversationLog.push({role,text:text.trim(),timestamp:new Date().toLocaleTimeString()});}
+function addMessage(role,content=''){
+  const d=document.createElement('div');d.className='message '+role;
+  d.innerHTML='<div class="message-content">'+content+'</div>';
+  chatMessages.appendChild(d);chatMessages.scrollTop=chatMessages.scrollHeight;return d;
+}
+function updateMessage(div,content){
+  const c=div.querySelector('.message-content');
+  if(c.textContent!==content)c.textContent=content;
+  if(chatMessages.scrollHeight-chatMessages.scrollTop-chatMessages.clientHeight<100)chatMessages.scrollTop=chatMessages.scrollHeight;
+}
+downloadLogBtn.addEventListener('click',()=>{
+  if(!conversationLog.length){alert('No conversation recorded.');return;}
+  const s=PERFORMANCE_SCENARIOS[currentScenarioIndex];
+  let log='THE PHONE — LOG\n'+currentSessionStartTime.toLocaleString()+'\n'+s.name+'\n\n';
+  conversationLog.forEach(e=>{log+='['+e.timestamp+'] '+e.role.toUpperCase()+':\n'+e.text+'\n\n';});
+  const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([log],{type:'text/plain'})),download:'the_phone_'+s.name.toLowerCase().replace(/\s+/g,'_')+'.txt'});a.click();
+});
+
+// ═══════════════════════════════════
+// GET EPHEMERAL KEY
+// ═══════════════════════════════════
+async function getEphemeralKey(voice){
+  if(directApiKey&&directApiKey.startsWith('sk-')) return directApiKey;
+  try{const d=await authManager.requestKey(voice,600000);return d.ephemeralKey;}
+  catch(e){setOverlayState('idle');alert('Failed to get key:\n'+e.message+'\n\nTip: paste sk-... key in the field below CONNECT.');return null;}
+}
+
+// ═══════════════════════════════════
+// CONNECT
+// ═══════════════════════════════════
+async function connectRealtime(){
+  const s=PERFORMANCE_SCENARIOS[currentScenarioIndex];
+  setOverlayState('connecting');
+  const key=await getEphemeralKey(s.voice);
+  if(!key){setOverlayState('idle');return;}
+  try{
+    updateStatus('Connecting...',false);
+    ws=new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5',['realtime','openai-insecure-api-key.'+key,'openai-beta.realtime-v1']);
+    ws.onopen=()=>{
+      isConnected=true;updateStatus('Connected',true);
+      messageInput.disabled=false;messageInput.placeholder='Enter message...';
+      sendBtn.disabled=false;goOnBtn.disabled=false;downloadLogBtn.style.display='none';
+      startNewSession();currentPhaseIndex=0;currentPhaseResponseCount=0;aiResponseCount=0;isFinalMessageSent=false;
+      updatePhaseIndicator();
+      const phase=performancePhases.length>0?performancePhases[0]:{instructions:s.instructions,temperature:0.9};
+      ws.send(JSON.stringify({type:'session.update',session:{modalities:['text','audio'],voice:s.voice,instructions:phase.instructions,temperature:phase.temperature,input_audio_format:'pcm16',output_audio_format:'pcm16',turn_detection:{type:'server_vad',threshold:vadThreshold,prefix_padding_ms:300,silence_duration_ms:vadSilenceDuration}}}));
+      setOverlayState('connected');
+      syncEditorConnectBtns();
+      setTimeout(()=>startRecording(),800);
+    };
+    ws.onmessage=async(event)=>{
+      try{
+        const data=JSON.parse(event.data);
+        if(data.type==='response.audio_transcript.delta'){
+          currentText+=data.delta;
+          if(!currentMessageDiv)currentMessageDiv=addMessage('assistant',currentText);
+          else if(!ws._txTimeout){ws._txTimeout=setTimeout(()=>{updateMessage(currentMessageDiv,currentText);ws._txTimeout=null;},50);}
+        }else if(data.type==='input_audio_buffer.speech_started'){
+          if(!currentMessageDiv)currentMessageDiv=addMessage('user','🎤');
+        }else if(data.type==='input_audio_buffer.speech_stopped'){
+          isSpeechActive=false;
+        }else if(data.type==='conversation.item.input_audio_transcription.completed'){
+          if(currentMessageDiv&&currentMessageDiv.classList.contains('user')){updateMessage(currentMessageDiv,data.transcript);logMessage('user',data.transcript);}
+          currentMessageDiv=null;isSpeechActive=false;
+        }else if(data.type==='response.audio.delta'){
+          if(!isAISpeaking){isAISpeaking=true;isSpeechActive=false;}
+          isAudioPlaying=true;setOverlayState('speaking');
+          updateStatus('AI speaking',true);audioIndicator.classList.remove('hidden');
+          audioQueue.push(data.delta);if(!isPlaying){isPlaying=true;playAudioQueue();}
+        }else if(data.type==='response.done'){
+          if(currentMessageDiv&&currentText){updateMessage(currentMessageDiv,currentText);logMessage('assistant',currentText);}
+          currentText='';currentMessageDiv=null;aiResponseCount++;currentPhaseResponseCount++;
+          if(isFinalMessageSent){setTimeout(()=>disconnect(),1500);return;}
+          if(performancePhases.length>0){const cur=performancePhases[currentPhaseIndex];if(currentPhaseResponseCount>=cur.duration)setTimeout(()=>switchToNextPhase(),500);}
+        }else if(data.type==='error'){console.error('WS error:',data.error);updateStatus('Error: '+data.error.message,false);}
+      }catch(e){console.error('onmessage error:',e);}
+    };
+    ws.onerror=()=>{updateStatus('Connection error',false);setOverlayState('idle');};
+    ws.onclose=()=>{
+      isConnected=false;updateStatus('Disconnected',false);
+      messageInput.disabled=true;messageInput.placeholder='Connect first...';
+      sendBtn.disabled=true;goOnBtn.disabled=true;
+      audioIndicator.classList.add('hidden');stopRecording();
+      if(conversationLog.length>0)downloadLogBtn.style.display='inline-block';
+      setOverlayState('idle');
+      syncEditorConnectBtns();    };
+  }catch(e){updateStatus('Error: '+e.message,false);setOverlayState('idle');}
+}
+
+// ═══════════════════════════════════
+// AUDIO PLAYBACK
+// ═══════════════════════════════════
+function createTelephoneFilter(ctx){
+  const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=300;hp.Q.value=0.7;
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=3400;lp.Q.value=0.7;
+  const mb=ctx.createBiquadFilter();mb.type='peaking';mb.frequency.value=1200;mb.Q.value=1.5;mb.gain.value=3;
+  hp.connect(mb);mb.connect(lp);return{input:hp,output:lp};
+}
+async function playAudioQueue(){
+  if(!playbackAudioContext){playbackAudioContext=new(window.AudioContext||window.webkitAudioContext)();audioPlaybackStartTime=playbackAudioContext.currentTime;telephoneFilter=createTelephoneFilter(playbackAudioContext);telephoneFilter.output.connect(playbackAudioContext.destination);}
+  while(audioQueue.length>0){
+    const b64=audioQueue.shift();
+    try{
+      const bin=atob(b64),bytes=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+      const pcmLen=bytes.length/2;if(!pcmLen)continue;
+      const buf=playbackAudioContext.createBuffer(1,pcmLen,24000);
+      const ch=buf.getChannelData(0);const dv=new DataView(bytes.buffer);
+      for(let i=0;i<pcmLen;i++)ch[i]=dv.getInt16(i*2,true)/32768;
+      const src=playbackAudioContext.createBufferSource();src.buffer=buf;src.connect(telephoneFilter.input);
+      const t=Math.max(playbackAudioContext.currentTime,audioPlaybackStartTime);
+      src.start(t);audioPlaybackStartTime=t+buf.duration;
+      scheduledSourceNodes.push(src);
+      src.onended=()=>{
+        scheduledSourceNodes.splice(scheduledSourceNodes.indexOf(src),1);
+        if(scheduledSourceNodes.length===0&&audioQueue.length===0){
+          isPlaying=false;isAudioPlaying=false;audioIndicator.classList.add('hidden');audioPlaybackStartTime=0;
+          setTimeout(()=>{isAISpeaking=false;if(isConnected){setOverlayState('recording');updateStatus('Connected',true);}},300);
+        }
+      };
+    }catch(e){console.error('audio chunk:',e);}
+  }
+  if(isPlaying)setTimeout(()=>playAudioQueue(),100);
+}
+
+// ═══════════════════════════════════
+// SEND / DISCONNECT
+// ═══════════════════════════════════
+function sendMessage(){
+  const text=messageInput.value.trim();if(!text||!isConnected)return;
+  isFirstInteraction=false;addMessage('user',text);logMessage('user',text);messageInput.value='';
+  ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text}]}}));
+  ws.send(JSON.stringify({type:'response.create',response:{modalities:['text','audio']}}));
+}
+function disconnect(){
+  if(ws)ws.close();stopRecording();
+  isFirstInteraction=true;isAISpeaking=false;isAudioPlaying=false;isSpeechActive=false;
+  scheduledSourceNodes.forEach(n=>{try{n.stop()}catch(e){}});
+  scheduledSourceNodes=[];audioQueue=[];isPlaying=false;audioPlaybackStartTime=0;
+  [audioContext,playbackAudioContext].forEach(ctx=>{if(ctx){try{ctx.close()}catch(e){}}});
+  audioContext=null;playbackAudioContext=null;telephoneFilter=null;
+}
+
+// ═══════════════════════════════════
+// RECORDING
+// ═══════════════════════════════════
+async function startRecording(){
+  if(!isConnected)return;
+  if(isFirstInteraction){
+    isFirstInteraction=false;isAISpeaking=true;setOverlayState('speaking');updateStatus('Waiting for INTRO...',true);
+    ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text:'BEGIN'}]}}));
+    ws.send(JSON.stringify({type:'response.create',response:{modalities:['text','audio']}}));
+    await new Promise(r=>setTimeout(r,500));
+  }
+  try{
+    mediaStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+    if(!audioContext)audioContext=new(window.AudioContext||window.webkitAudioContext)();
+    const src=audioContext.createMediaStreamSource(mediaStream);
+    const proc=audioContext.createScriptProcessor(2048,1,1);
+    let chunks=[],lastSend=0;
+    proc.onaudioprocess=e=>{
+      if(!isRecording||!ws||ws.readyState!==WebSocket.OPEN)return;
+      if(isAISpeaking||isAudioPlaying)return;
+      const inp=e.inputBuffer.getChannelData(0);
+      const rms=calcRMS(inp);updateAudioLevel(rms);
+      const ratio=audioContext.sampleRate/24000;
+      const out=new Float32Array(Math.floor(inp.length/ratio));
+      for(let i=0;i<out.length;i++)out[i]=inp[Math.floor(i*ratio)];
+      if(!isSpeechActive){if(rms>=speechGateThreshold)isSpeechActive=true;else for(let i=0;i<out.length;i++)out[i]=0;}
+      else{if(rms<noiseGateThreshold)for(let i=0;i<out.length;i++)out[i]=0;}
+      chunks.push(out);
+      const now=Date.now();
+      if(now-lastSend>=100&&chunks.length>0){
+        const total=chunks.reduce((s,c)=>s+c.length,0);
+        const combined=new Float32Array(total);let off=0;chunks.forEach(c=>{combined.set(c,off);off+=c.length;});chunks=[];
+        const pcm16=new Int16Array(combined.length);
+        for(let i=0;i<combined.length;i++){const v=Math.max(-1,Math.min(1,combined[i]));pcm16[i]=v<0?v*0x8000:v*0x7FFF;}
+        const b64=arrayBufferToBase64(pcm16.buffer);
+        requestAnimationFrame(()=>{if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'input_audio_buffer.append',audio:b64}));});
+        lastSend=now;
+      }
+    };
+    src.connect(proc);proc.connect(audioContext.destination);
+    audioWorkletNode=proc;isRecording=true;audioLevelDisplay.style.display='block';
+    if(!isAISpeaking){setOverlayState('recording');updateStatus('Listening...',true);}
+  }catch(e){alert('Mic error: '+e.message);}
+}
+function stopRecording(){
+  if(isRecording){isRecording=false;audioLevelDisplay.style.display='none';isSpeechActive=false;}
+  if(audioWorkletNode){try{audioWorkletNode.disconnect()}catch(e){}audioWorkletNode=null;}
+  mediaStream=null;
+}
+function calcRMS(data){let s=0;for(let i=0;i<data.length;i++)s+=data[i]*data[i];return Math.sqrt(s/data.length);}
+function arrayBufferToBase64(buf){const bytes=new Uint8Array(buf);let bin='';for(let i=0;i<bytes.length;i++)bin+=String.fromCharCode(bytes[i]);return btoa(bin);}
+function updateAudioLevel(rms){
+  audioLevelValue.textContent=rms.toFixed(3);
+  audioLevelBar.style.width=Math.min(100,(rms/0.2)*100)+'%';
+  noiseGateThresholdLine.style.left=Math.min(100,(noiseGateThreshold/0.2)*100)+'%';
+  speechGateThresholdLine.style.left=Math.min(100,(speechGateThreshold/0.2)*100)+'%';
+  audioLevelBar.style.background=rms<0.05?'#333':rms<0.1?'#555':'#888';
+}
+
+// ═══════════════════════════════════
+// SIDEBAR
+// ═══════════════════════════════════
+function openSidebar(){
+  const s=PERFORMANCE_SCENARIOS[currentScenarioIndex];
+  sidebarTitle.textContent='⚙️ '+s.number+'. '+s.name;
+  const stored=loadScenarioFromStorage(currentScenarioIndex);
+  instructionsText.value=stored||currentScenarioFileText;
+  syncEditorConnectBtns();
+  sidebarOverlay.classList.add('active');sidebarEditor.classList.add('active');
+  document.body.style.overflow='hidden';
+}
+function closeSidebar(){sidebarOverlay.classList.remove('active');sidebarEditor.classList.remove('active');document.body.style.overflow='';}
+
+function doSave(){
+  const txt=instructionsText.value.trim();
+  if(txt.length<20){alert('Too short');return;}
+  const parsed=parseScenarioFile(txt);
+  if(parsed.phases.length===0){alert('No ===PHASE=== blocks found');return;}
+  currentScenarioFileText=txt;performancePhases=parsed.phases;
+  if(parsed.voice){PERFORMANCE_SCENARIOS[currentScenarioIndex].voice=parsed.voice;voiceSelect.value=parsed.voice;}
+  if(parsed.name)PERFORMANCE_SCENARIOS[currentScenarioIndex].name=parsed.name;
+  currentPhaseIndex=0;currentPhaseResponseCount=0;
+  updatePhaseIndicator();updateScenarioDisplay();
+  saveScenarioToStorage(currentScenarioIndex,txt);
+  addMessage('assistant','<strong>💾 Saved</strong> — '+parsed.phases.length+' phases. Reconnect to apply.');
+}
+
+editScenarioBtn.addEventListener('click',openSidebar);
+sidebarCloseBtn.addEventListener('click',closeSidebar);
+sidebarOverlay.addEventListener('click',closeSidebar);
+document.getElementById('saveBtnTop').addEventListener('click',doSave);
+document.getElementById('saveBtn').addEventListener('click',doSave);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&sidebarEditor.classList.contains('active'))closeSidebar();});
+
+const editorConnectBtn=document.getElementById('editorConnectBtn');
+const editorDisconnectBtn=document.getElementById('editorDisconnectBtn');
+editorConnectBtn.addEventListener('click',()=>connectRealtime());
+editorDisconnectBtn.addEventListener('click',()=>disconnect());
+
+// Keep editor connect/disconnect in sync with connection state
+function syncEditorConnectBtns(){
+  editorConnectBtn.style.display = isConnected ? 'none' : 'block';
+  editorConnectBtn.disabled = isConnected;
+  editorDisconnectBtn.style.display = isConnected ? 'block' : 'none';
+  editorDisconnectBtn.disabled = !isConnected;
+}
+
+document.getElementById('resetBtn').addEventListener('click',()=>{
+  if(!confirm('Reset to built-in fallback?'))return;
+  const s=PERFORMANCE_SCENARIOS[currentScenarioIndex];
+  currentScenarioFileText=makeFallbackText(s);
+  performancePhases=makeFallbackPhases(s);
+  instructionsText.value=currentScenarioFileText;
+  currentPhaseIndex=0;currentPhaseResponseCount=0;updatePhaseIndicator();
+  try{localStorage.removeItem('the_phone_scenario_'+currentScenarioIndex);}catch(e){}
+  addMessage('assistant','<strong>↺ Reset</strong> — localStorage cleared.');
+});
+document.getElementById('exportBtn').addEventListener('click',()=>{
+  const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([currentScenarioFileText],{type:'text/plain'})),download:'scenario_'+(currentScenarioIndex+1)+'.txt'});a.click();
+});
+document.getElementById('importBtn').addEventListener('click',()=>{
+  const inp=document.createElement('input');inp.type='file';inp.accept='.txt';
+  inp.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{instructionsText.value=ev.target.result;alert('Loaded — press Save to apply');};r.readAsText(f);};inp.click();
+});
+document.getElementById('prevScenarioBtn').addEventListener('click',()=>{if(!isConnected)selectScenario((currentScenarioIndex-1+9)%9);});
+document.getElementById('nextScenarioBtn').addEventListener('click',()=>{if(!isConnected)selectScenario((currentScenarioIndex+1)%9);});
+document.getElementById('lockScenarioBtn').addEventListener('click',()=>{
+  isScenarioLocked=!isScenarioLocked;
+  try{localStorage.setItem('isScenarioLocked',isScenarioLocked+'');}catch(e){}
+  document.getElementById('lockScenarioBtn').textContent=isScenarioLocked?'🔒 Locked':'🔓 Unlock';
+  updateScenarioDisplay();
+});
+
+// ═══════════════════════════════════
+// SCENARIO BUTTONS & KEYBOARD
+// ═══════════════════════════════════
+mainOverlayBtn.addEventListener('click',()=>{if(!isConnected)connectRealtime();});
+overlayDisconnectBtn.addEventListener('click',disconnect);
+overlayScenarioSelect.addEventListener('change',e=>selectScenario(parseInt(e.target.value,10)));
+sendBtn.addEventListener('click',sendMessage);
+messageInput.addEventListener('keypress',e=>{if(e.key==='Enter'&&isConnected)sendMessage();});
+goOnBtn.addEventListener('click',()=>{
+  if(!isConnected)return;
+  ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text:'continue'}]}}));
+  ws.send(JSON.stringify({type:'response.create',response:{modalities:['text','audio']}}));
+});
+document.getElementById('scenarioButtons').addEventListener('click',async e=>{
+  const btn=e.target.closest('.scenario-btn');if(!btn)return;
+  if(isConnected){alert('Disconnect first');return;}
+  selectScenario(parseInt(btn.dataset.scenario,10));
+});
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  if(e.key>='1'&&e.key<='9')selectScenario(parseInt(e.key)-1);
+});
+
+// ═══════════════════════════════════
+// VAD CONTROLS
+// ═══════════════════════════════════
+thresholdRange.addEventListener('input',e=>{vadThreshold=parseInt(e.target.value)/100;thresholdValue.textContent=vadThreshold.toFixed(2);[quietBtn,normalBtn,noisyBtn].forEach(b=>b.classList.remove('active'));});
+silenceRange.addEventListener('input',e=>{vadSilenceDuration=parseInt(e.target.value);silenceValue.textContent=vadSilenceDuration+'ms';[quietBtn,normalBtn,noisyBtn].forEach(b=>b.classList.remove('active'));});
+speechGateRange.addEventListener('input',e=>{speechGateThreshold=parseInt(e.target.value)/100;speechGateValue.textContent=speechGateThreshold.toFixed(3);[quietBtn,normalBtn,noisyBtn].forEach(b=>b.classList.remove('active'));});
+noiseGateRange.addEventListener('input',e=>{noiseGateThreshold=parseInt(e.target.value)/100;noiseGateValue.textContent=noiseGateThreshold.toFixed(3);[quietBtn,normalBtn,noisyBtn].forEach(b=>b.classList.remove('active'));});
+function setVADPreset(thr,sil,sg,ng,btn){
+  vadThreshold=thr;vadSilenceDuration=sil;speechGateThreshold=sg;noiseGateThreshold=ng;
+  thresholdRange.value=thr*100;thresholdValue.textContent=thr.toFixed(2);
+  silenceRange.value=sil;silenceValue.textContent=sil+'ms';
+  speechGateRange.value=sg*100;speechGateValue.textContent=sg.toFixed(3);
+  noiseGateRange.value=ng*100;noiseGateValue.textContent=ng.toFixed(3);
+  [quietBtn,normalBtn,noisyBtn].forEach(b=>b.classList.remove('active'));btn.classList.add('active');
+}
+quietBtn.addEventListener('click',()=>setVADPreset(0.5,500,0.015,0.003,quietBtn));
+normalBtn.addEventListener('click',()=>setVADPreset(0.99,1200,0.05,0.05,normalBtn));
+noisyBtn.addEventListener('click',()=>setVADPreset(0.99,2000,0.04,0.01,noisyBtn));
+</script>
+
+</body>
+</html>
