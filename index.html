@@ -259,10 +259,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <button class="vad-preset-btn" id="quietBtn">Quiet</button>
     <button class="vad-preset-btn active" id="normalBtn">Normal</button>
     <button class="vad-preset-btn" id="noisyBtn">Noisy</button>
-    <div class="vad-control-group"><label>Sensitivity:</label><input type="range" id="thresholdRange" min="0" max="100" value="99"><span class="val" id="thresholdValue">0.99</span></div>
-    <div class="vad-control-group"><label>Silence:</label><input type="range" id="silenceRange" min="500" max="3000" step="100" value="1200"><span class="val" id="silenceValue">1200ms</span></div>
-    <div class="vad-control-group"><label>Speech Gate:</label><input type="range" id="speechGateRange" min="0" max="50" value="5"><span class="val" id="speechGateValue">0.050</span></div>
-    <div class="vad-control-group"><label>Noise Gate:</label><input type="range" id="noiseGateRange" min="0" max="50" value="5"><span class="val" id="noiseGateValue">0.050</span></div>
+    <div class="vad-control-group"><label>Sensitivity:</label><input type="range" id="thresholdRange" min="0" max="100" value="50"><span class="val" id="thresholdValue">0.50</span></div>
+    <div class="vad-control-group"><label>Silence:</label><input type="range" id="silenceRange" min="500" max="5000" step="100" value="2500"><span class="val" id="silenceValue">2500ms</span></div>
+    <div class="vad-control-group"><label>Speech Gate:</label><input type="range" id="speechGateRange" min="0" max="50" value="1.5" step="0.1"><span class="val" id="speechGateValue">0.015</span></div>
+    <div class="vad-control-group"><label>Noise Gate:</label><input type="range" id="noiseGateRange" min="0" max="50" value="0.3" step="0.1"><span class="val" id="noiseGateValue">0.003</span></div>
     <div class="audio-level-display" id="audioLevelDisplay">
       <div style="display:flex;justify-content:space-between"><span style="font-size:10px;color:#555">Mic</span><span class="audio-level-value" id="audioLevelValue">0.000</span></div>
       <div class="audio-level-bar-container">
@@ -554,7 +554,7 @@ let currentText='',currentMessageDiv=null;
 let audioQueue=[],isPlaying=false,scheduledSourceNodes=[],audioPlaybackStartTime=0;
 let mediaStream=null,audioWorkletNode=null,isRecording=false;
 let isAISpeaking=false,isAudioPlaying=false,isFirstInteraction=true,isSpeechActive=false;
-let vadThreshold=0.99,vadSilenceDuration=1200,speechGateThreshold=0.05,noiseGateThreshold=0.05;
+let vadThreshold=0.5,vadSilenceDuration=2500,speechGateThreshold=0.015,noiseGateThreshold=0.003;
 let conversationLog=[],currentSessionStartTime=null;
 
 // ═══════════════════════════════════
@@ -993,8 +993,8 @@ document.addEventListener('keydown',e=>{
 // ═══════════════════════════════════
 thresholdRange.addEventListener('input',e=>{vadThreshold=parseInt(e.target.value)/100;thresholdValue.textContent=vadThreshold.toFixed(2);[quietBtn,normalBtn,noisyBtn].forEach(b=>b.classList.remove('active'));});
 silenceRange.addEventListener('input',e=>{vadSilenceDuration=parseInt(e.target.value);silenceValue.textContent=vadSilenceDuration+'ms';[quietBtn,normalBtn,noisyBtn].forEach(b=>b.classList.remove('active'));});
-speechGateRange.addEventListener('input',e=>{speechGateThreshold=parseInt(e.target.value)/100;speechGateValue.textContent=speechGateThreshold.toFixed(3);[quietBtn,normalBtn,noisyBtn].forEach(b=>b.classList.remove('active'));});
-noiseGateRange.addEventListener('input',e=>{noiseGateThreshold=parseInt(e.target.value)/100;noiseGateValue.textContent=noiseGateThreshold.toFixed(3);[quietBtn,normalBtn,noisyBtn].forEach(b=>b.classList.remove('active'));});
+speechGateRange.addEventListener('input',e=>{speechGateThreshold=parseFloat(e.target.value)/100;speechGateValue.textContent=speechGateThreshold.toFixed(3);[quietBtn,normalBtn,noisyBtn].forEach(b=>b.classList.remove('active'));});
+noiseGateRange.addEventListener('input',e=>{noiseGateThreshold=parseFloat(e.target.value)/100;noiseGateValue.textContent=noiseGateThreshold.toFixed(3);[quietBtn,normalBtn,noisyBtn].forEach(b=>b.classList.remove('active'));});
 function setVADPreset(thr,sil,sg,ng,btn){
   vadThreshold=thr;vadSilenceDuration=sil;speechGateThreshold=sg;noiseGateThreshold=ng;
   thresholdRange.value=thr*100;thresholdValue.textContent=thr.toFixed(2);
@@ -1004,7 +1004,7 @@ function setVADPreset(thr,sil,sg,ng,btn){
   [quietBtn,normalBtn,noisyBtn].forEach(b=>b.classList.remove('active'));btn.classList.add('active');
 }
 quietBtn.addEventListener('click',()=>setVADPreset(0.5,500,0.015,0.003,quietBtn));
-normalBtn.addEventListener('click',()=>setVADPreset(0.99,1200,0.05,0.05,normalBtn));
+normalBtn.addEventListener('click',()=>setVADPreset(0.5,2500,0.015,0.003,normalBtn));
 noisyBtn.addEventListener('click',()=>setVADPreset(0.99,2000,0.04,0.01,noisyBtn));
 </script>
 
