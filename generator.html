@@ -36,6 +36,13 @@
     </header>
     <main>
       <section class="field">
+        <label for="templateInput">Template prompt</label>
+        <textarea id="templateInput"></textarea>
+      </section>
+      <div class="actions">
+        <button id="resetTemplateBtn">Reset template</button>
+      </div>
+      <section class="field">
         <label for="rulesInput">Generation rules</label>
         <textarea id="rulesInput" placeholder="Describe the scenario, character, atmosphere, backbone rules, phases, timing, voice, and desired ending..."></textarea>
       </section>
@@ -57,30 +64,58 @@
   </div>
   <script>
     const BACKEND_URL='https://iiopenai-auth-production-64f4.up.railway.app';
+    const DEFAULT_TEMPLATE=`Create one complete interactive voice-performance scenario for The Phone application.
+Return only the scenario text. Do not use Markdown fences or add commentary.
+The output must use exactly this editable format:
+name: Scenario name
+voice: one of alloy, ash, ballad, coral, echo, marin, sage, shimmer, verse, cedar
+
+<BACKBONE>
+Global rules that apply throughout the entire experience.
+</BACKBONE>
+
+===PHASE===
+temperature: number from 0 to 1
+duration: positive number of assistant responses
+nudge: optional short trigger; omit the line when unnecessary
+instructions: phase instructions
+
+Repeat ===PHASE=== blocks as needed. Make every phase playable and ensure all user rules are reflected.`;
+    const templateInput=document.getElementById('templateInput');
     const rulesInput=document.getElementById('rulesInput');
     const scenarioOutput=document.getElementById('scenarioOutput');
     const generateBtn=document.getElementById('generateBtn');
     const clearBtn=document.getElementById('clearBtn');
+    const resetTemplateBtn=document.getElementById('resetTemplateBtn');
     const copyBtn=document.getElementById('copyBtn');
     const downloadBtn=document.getElementById('downloadBtn');
     const status=document.getElementById('status');
     const RULES_STORAGE_KEY='the_phone_generator_rules';
+    const TEMPLATE_STORAGE_KEY='the_phone_generator_template';
 
     function setStatus(message,error=false){status.textContent=message;status.classList.toggle('error',error);}
 
-    try{rulesInput.value=localStorage.getItem(RULES_STORAGE_KEY)||'';}catch(error){}
+    try{
+      rulesInput.value=localStorage.getItem(RULES_STORAGE_KEY)||'';
+      templateInput.value=localStorage.getItem(TEMPLATE_STORAGE_KEY)||DEFAULT_TEMPLATE;
+    }catch(error){templateInput.value=DEFAULT_TEMPLATE;}
+    templateInput.addEventListener('input',()=>{
+      try{localStorage.setItem(TEMPLATE_STORAGE_KEY,templateInput.value);}catch(error){}
+    });
     rulesInput.addEventListener('input',()=>{
       try{localStorage.setItem(RULES_STORAGE_KEY,rulesInput.value);}catch(error){}
     });
 
     generateBtn.addEventListener('click',async()=>{
       const rules=rulesInput.value.trim();
+      const templatePrompt=templateInput.value.trim();
       if(!rules){setStatus('Enter generation rules first.',true);rulesInput.focus();return;}
+      if(!templatePrompt){setStatus('Template prompt cannot be empty.',true);templateInput.focus();return;}
       generateBtn.disabled=true;generateBtn.textContent='Generating...';
       setStatus('GPT-5.6 Sol is generating the scenario...');
       try{
         const response=await fetch(BACKEND_URL+'/generate-scenario',{
-          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rules})
+          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rules,templatePrompt})
         });
         const data=await response.json();
         if(!response.ok)throw new Error(data.error||data.details||`HTTP ${response.status}`);
@@ -94,6 +129,11 @@
       rulesInput.value='';scenarioOutput.value='';
       try{localStorage.removeItem(RULES_STORAGE_KEY);}catch(error){}
       setStatus('Model: GPT-5.6 Sol');rulesInput.focus();
+    });
+    resetTemplateBtn.addEventListener('click',()=>{
+      templateInput.value=DEFAULT_TEMPLATE;
+      try{localStorage.setItem(TEMPLATE_STORAGE_KEY,DEFAULT_TEMPLATE);}catch(error){}
+      setStatus('Template prompt restored.');templateInput.focus();
     });
     copyBtn.addEventListener('click',async()=>{
       if(!scenarioOutput.value.trim()){setStatus('Nothing to copy.',true);return;}
