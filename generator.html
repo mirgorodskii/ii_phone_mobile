@@ -25,6 +25,10 @@
     .status{min-height:18px;color:#666;font-size:11px;line-height:1.5}
     .status.error{color:#b77}
     .meta{font-size:10px;color:#444}
+    .variable-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}
+    .variable-control{display:flex;flex-direction:column;gap:5px;padding:9px;border:1px solid #292929;border-radius:6px;background:#0d0d0d}
+    .variable-control label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .variable-control select{width:100%;padding:8px;border:1px solid #333;border-radius:5px;background:#171717;color:#aaa;font-size:12px;outline:none}
     @media(min-width:760px){main{padding:20px}.field{min-height:360px}}
   </style>
 </head>
@@ -46,6 +50,7 @@
         <label for="variableListsInput">Variable lists</label>
         <textarea id="variableListsInput"></textarea>
       </section>
+      <div class="variable-controls" id="variableControls"></div>
       <div class="actions">
         <button id="resetVariableListsBtn">Reset variable lists</button>
       </div>
@@ -194,6 +199,7 @@ Repeat ===PHASE=== blocks as needed. Make every phase playable and ensure all us
 For each phase define: - Visible intention of AI - Hidden dramatic function - Indirect action - New information - AI emotion - Human emotion - Method to elicit response - Transition condition`;
     const templateInput=document.getElementById('templateInput');
     const variableListsInput=document.getElementById('variableListsInput');
+    const variableControls=document.getElementById('variableControls');
     const rulesInput=document.getElementById('rulesInput');
     const scenarioOutput=document.getElementById('scenarioOutput');
     const generateBtn=document.getElementById('generateBtn');
@@ -206,8 +212,51 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
     const RULES_STORAGE_KEY='the_phone_generator_rules';
     const TEMPLATE_STORAGE_KEY='the_phone_generator_template';
     const VARIABLE_LISTS_STORAGE_KEY='the_phone_generator_variable_lists';
+    const VARIABLE_SELECTIONS_STORAGE_KEY='the_phone_generator_variable_selections';
 
     function setStatus(message,error=false){status.textContent=message;status.classList.toggle('error',error);}
+
+    function parseVariableLists(text){
+      const lists=[];let current=null;
+      for(const rawLine of text.replace(/\r\n?/g,'\n').split('\n')){
+        const line=rawLine.trim();if(!line)continue;
+        const heading=line.match(/^\d+\.\s+(.+)$/);
+        if(heading){current={name:heading[1].trim(),values:[]};lists.push(current);continue;}
+        if(!current)continue;
+        const bullet=line.match(/^[-*]\s+(.+)$/);
+        if(bullet){current.values.push(bullet[1].trim());continue;}
+        const inline=line.split(/\s+-\s+/).slice(1).map(value=>value.trim()).filter(Boolean);
+        if(inline.length)current.values.push(...inline);
+      }
+      return lists.filter(list=>list.values.length);
+    }
+
+    function readSavedSelections(){
+      try{return JSON.parse(localStorage.getItem(VARIABLE_SELECTIONS_STORAGE_KEY)||'{}');}
+      catch(error){return {};}
+    }
+
+    function saveVariableSelections(){
+      const selections={};
+      variableControls.querySelectorAll('select').forEach(select=>{selections[select.dataset.name]=select.value;});
+      try{localStorage.setItem(VARIABLE_SELECTIONS_STORAGE_KEY,JSON.stringify(selections));}catch(error){}
+      return selections;
+    }
+
+    function renderVariableControls(){
+      const saved=readSavedSelections();variableControls.textContent='';
+      for(const list of parseVariableLists(variableListsInput.value)){
+        const wrapper=document.createElement('div');wrapper.className='variable-control';
+        const label=document.createElement('label');label.textContent=list.name;label.title=list.name;
+        const select=document.createElement('select');select.dataset.name=list.name;
+        const randomOption=document.createElement('option');randomOption.value='__random__';randomOption.textContent='Random';select.appendChild(randomOption);
+        for(const value of list.values){const option=document.createElement('option');option.value=value;option.textContent=value;select.appendChild(option);}
+        select.value=list.values.includes(saved[list.name])?saved[list.name]:'__random__';
+        select.addEventListener('change',saveVariableSelections);
+        wrapper.append(label,select);variableControls.appendChild(wrapper);
+      }
+      saveVariableSelections();
+    }
 
     try{
       rulesInput.value=localStorage.getItem(RULES_STORAGE_KEY)||'';
@@ -219,7 +268,9 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
     });
     variableListsInput.addEventListener('input',()=>{
       try{localStorage.setItem(VARIABLE_LISTS_STORAGE_KEY,variableListsInput.value);}catch(error){}
+      renderVariableControls();
     });
+    renderVariableControls();
     rulesInput.addEventListener('input',()=>{
       try{localStorage.setItem(RULES_STORAGE_KEY,rulesInput.value);}catch(error){}
     });
@@ -228,13 +279,14 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
       const rules=rulesInput.value.trim();
       const templatePrompt=templateInput.value.trim();
       const variableLists=variableListsInput.value.trim();
+      const variableSelections=saveVariableSelections();
       if(!rules){setStatus('Enter generation rules first.',true);rulesInput.focus();return;}
       if(!templatePrompt){setStatus('Template prompt cannot be empty.',true);templateInput.focus();return;}
       generateBtn.disabled=true;generateBtn.textContent='Generating...';
       setStatus('GPT-5.6 Sol is generating the scenario...');
       try{
         const response=await fetch(BACKEND_URL+'/generate-scenario',{
-          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rules,templatePrompt,variableLists})
+          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rules,templatePrompt,variableLists,variableSelections})
         });
         const data=await response.json();
         if(!response.ok)throw new Error(data.error||data.details||`HTTP ${response.status}`);
@@ -256,7 +308,11 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
     });
     resetVariableListsBtn.addEventListener('click',()=>{
       variableListsInput.value=DEFAULT_VARIABLE_LISTS;
-      try{localStorage.setItem(VARIABLE_LISTS_STORAGE_KEY,DEFAULT_VARIABLE_LISTS);}catch(error){}
+      try{
+        localStorage.setItem(VARIABLE_LISTS_STORAGE_KEY,DEFAULT_VARIABLE_LISTS);
+        localStorage.removeItem(VARIABLE_SELECTIONS_STORAGE_KEY);
+      }catch(error){}
+      renderVariableControls();
       setStatus('Variable lists restored.');variableListsInput.focus();
     });
     copyBtn.addEventListener('click',async()=>{
