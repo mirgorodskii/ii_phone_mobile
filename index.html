@@ -556,6 +556,25 @@ let mediaStream=null,audioWorkletNode=null,isRecording=false;
 let isAISpeaking=false,isAudioPlaying=false,isFirstInteraction=true,isSpeechActive=false;
 let vadThreshold=0.5,vadSilenceDuration=2500,speechGateThreshold=0.015,noiseGateThreshold=0.003;
 let conversationLog=[],currentSessionStartTime=null;
+let autoGoOnTimer=null,lastResponseNeedsLongPause=false;
+const AUTO_GO_ON_DELAY_WITH_QUESTION=20000;
+const AUTO_GO_ON_DELAY_NO_QUESTION=4000;
+
+function resetAutoGoOnTimer(){
+  if(autoGoOnTimer){clearTimeout(autoGoOnTimer);autoGoOnTimer=null;}
+}
+
+function startAutoGoOnTimer(needsLongPause=false){
+  resetAutoGoOnTimer();
+  if(!isConnected||!ws||ws.readyState!==WebSocket.OPEN)return;
+  const delay=needsLongPause?AUTO_GO_ON_DELAY_WITH_QUESTION:AUTO_GO_ON_DELAY_NO_QUESTION;
+  autoGoOnTimer=setTimeout(()=>{
+    autoGoOnTimer=null;
+    if(!isConnected||!ws||ws.readyState!==WebSocket.OPEN||isSpeechActive||isAISpeaking||isAudioPlaying)return;
+    ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text:'continue'}]}}));
+    ws.send(JSON.stringify({type:'response.create',response:{output_modalities:['audio']}}));
+  },delay);
+}
 
 // ═══════════════════════════════════
 // DOM REFS
@@ -724,6 +743,8 @@ async function connectRealtime(){
           if(!currentMessageDiv)currentMessageDiv=addMessage('assistant',currentText);
           else if(!ws._txTimeout){ws._txTimeout=setTimeout(()=>{updateMessage(currentMessageDiv,currentText);ws._txTimeout=null;},50);}
         }else if(data.type==='input_audio_buffer.speech_started'){
+          resetAutoGoOnTimer();
+          isSpeechActive=true;
           if(!currentMessageDiv)currentMessageDiv=addMessage('user','🎤');
         }else if(data.type==='input_audio_buffer.speech_stopped'){
           isSpeechActive=false;
@@ -732,12 +753,14 @@ async function connectRealtime(){
           if(currentMessageDiv&&currentMessageDiv.classList.contains('user')){updateMessage(currentMessageDiv,transcript);logMessage('user',transcript);}
           currentMessageDiv=null;isSpeechActive=false;
         }else if(data.type==='response.audio.delta'||data.type==='response.output_audio.delta'){
+          resetAutoGoOnTimer();
           if(!isAISpeaking){isAISpeaking=true;isSpeechActive=false;}
           isAudioPlaying=true;setOverlayState('speaking');
           updateStatus('AI speaking',true);audioIndicator.classList.remove('hidden');
           audioQueue.push(data.delta);if(!isPlaying){isPlaying=true;playAudioQueue();}
         }else if(data.type==='response.done'){
           if(currentMessageDiv&&currentText){updateMessage(currentMessageDiv,currentText);logMessage('assistant',currentText);}
+          lastResponseNeedsLongPause=currentText.includes('?')||currentText.toLowerCase().includes('describe');
           currentText='';currentMessageDiv=null;aiResponseCount++;currentPhaseResponseCount++;
           if(isFinalMessageSent){setTimeout(()=>disconnect(),1500);return;}
           if(performancePhases.length>0){const cur=performancePhases[currentPhaseIndex];if(currentPhaseResponseCount>=cur.duration)setTimeout(()=>switchToNextPhase(),500);}
@@ -747,6 +770,7 @@ async function connectRealtime(){
     realtimeSocket.onerror=()=>{if(ws!==realtimeSocket)return;updateStatus('Connection error',false);setOverlayState('idle');};
     realtimeSocket.onclose=()=>{
       if(ws&&ws!==realtimeSocket)return;
+      resetAutoGoOnTimer();
       isConnected=false;updateStatus('Disconnected',false);
       messageInput.disabled=true;messageInput.placeholder='Connect first...';
       sendBtn.disabled=true;goOnBtn.disabled=true;
@@ -788,6 +812,7 @@ async function playAudioQueue(){
         if(scheduledSourceNodes.length===0&&audioQueue.length===0){
           isPlaying=false;isAudioPlaying=false;audioIndicator.classList.add('hidden');audioPlaybackStartTime=0;
           setTimeout(()=>{isAISpeaking=false;if(isConnected){setOverlayState('recording');updateStatus('Connected',true);}},300);
+          startAutoGoOnTimer(lastResponseNeedsLongPause);
         }
       };
     }catch(e){console.error('audio chunk:',e);}
@@ -800,12 +825,14 @@ async function playAudioQueue(){
 // ═══════════════════════════════════
 function sendMessageFrom(input){
   const text=input.value.trim();if(!text||!isConnected)return;
+  resetAutoGoOnTimer();
   isFirstInteraction=false;addMessage('user',text);logMessage('user',text);input.value='';
   ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text}]}}));
   ws.send(JSON.stringify({type:'response.create',response:{output_modalities:['audio']}}));
 }
 function sendMessage(){sendMessageFrom(messageInput);}
 function disconnect(){
+  resetAutoGoOnTimer();
   const closingSocket=ws;ws=null;isConnected=false;
   if(closingSocket)closingSocket.close();stopRecording();
   isFirstInteraction=true;isAISpeaking=false;isAudioPlaying=false;isSpeechActive=false;
@@ -975,6 +1002,7 @@ overlayMessageInput.addEventListener('keydown',e=>{
 });
 goOnBtn.addEventListener('click',()=>{
   if(!isConnected)return;
+  resetAutoGoOnTimer();
   ws.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text:'continue'}]}}));
   ws.send(JSON.stringify({type:'response.create',response:{output_modalities:['audio']}}));
 });
