@@ -24,6 +24,10 @@
     textarea{width:100%;flex:1;min-height:300px;padding:12px;border:1px solid #333;border-radius:6px;font-family:'Courier New',monospace;font-size:16px;line-height:1.7;resize:vertical;background:#0a0a0a;color:#fff;outline:none}
     textarea:focus{border-color:#555}
     textarea::placeholder{color:#444}
+    .comment-row{display:flex;gap:8px}
+    .comment-row input{flex:1;min-width:0;padding:11px 12px;border:1px solid #333;border-radius:6px;background:#0a0a0a;color:#fff;font-size:14px;outline:none}
+    .comment-row input:focus{border-color:#555}
+    .comment-row button{flex:0 0 auto}
     .actions{display:flex;gap:8px;flex-wrap:wrap}
     button{flex:1;min-width:130px;padding:11px;border:1px solid #444;border-radius:6px;background:#1e1e1e;color:#aaa;font-size:11px;letter-spacing:2px;text-transform:uppercase;cursor:pointer}
     button:hover:not(:disabled){background:#252525;color:#ddd}
@@ -78,6 +82,10 @@
         <label for="scenarioOutput">Generated scenario</label>
         <textarea id="scenarioOutput" placeholder="The generated scenario will appear here..."></textarea>
       </section>
+      <div class="comment-row">
+        <input id="revisionComment" type="text" placeholder="Comment on what should be changed...">
+        <button id="regenerateBtn">Regenerate</button>
+      </div>
       <div class="actions">
         <button id="copyBtn">Copy output</button>
         <button id="downloadBtn">Download .txt</button>
@@ -214,6 +222,8 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
     const rulesInput=document.getElementById('rulesInput');
     const exampleInput=document.getElementById('exampleInput');
     const scenarioOutput=document.getElementById('scenarioOutput');
+    const revisionComment=document.getElementById('revisionComment');
+    const regenerateBtn=document.getElementById('regenerateBtn');
     const generateBtn=document.getElementById('generateBtn');
     const clearBtn=document.getElementById('clearBtn');
     const resetTemplateBtn=document.getElementById('resetTemplateBtn');
@@ -227,6 +237,7 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
     const VARIABLE_SELECTIONS_STORAGE_KEY='the_phone_generator_variable_selections';
     const EXAMPLE_STORAGE_KEY='the_phone_generator_example';
     const FIELD_TOGGLES_STORAGE_KEY='the_phone_generator_field_toggles';
+    const REVISION_COMMENT_STORAGE_KEY='the_phone_generator_revision_comment';
 
     function setStatus(message,error=false){status.textContent=message;status.classList.toggle('error',error);}
 
@@ -293,6 +304,7 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
       templateInput.value=localStorage.getItem(TEMPLATE_STORAGE_KEY)||DEFAULT_TEMPLATE;
       variableListsInput.value=localStorage.getItem(VARIABLE_LISTS_STORAGE_KEY)||DEFAULT_VARIABLE_LISTS;
       exampleInput.value=localStorage.getItem(EXAMPLE_STORAGE_KEY)||'';
+      revisionComment.value=localStorage.getItem(REVISION_COMMENT_STORAGE_KEY)||'';
     }catch(error){templateInput.value=DEFAULT_TEMPLATE;variableListsInput.value=DEFAULT_VARIABLE_LISTS;}
     const savedFieldToggles=readFieldToggles();
     document.querySelectorAll('[data-field-toggle]').forEach(toggle=>{
@@ -313,6 +325,9 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
     });
     exampleInput.addEventListener('input',()=>{
       try{localStorage.setItem(EXAMPLE_STORAGE_KEY,exampleInput.value);}catch(error){}
+    });
+    revisionComment.addEventListener('input',()=>{
+      try{localStorage.setItem(REVISION_COMMENT_STORAGE_KEY,revisionComment.value);}catch(error){}
     });
 
     generateBtn.addEventListener('click',async()=>{
@@ -342,6 +357,29 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
         setStatus(`Generated with ${data.model||'gpt-5.6-sol'}. You can edit the result below.`);
       }catch(error){setStatus(`Generation failed: ${error.message}`,true);}
       finally{generateBtn.disabled=false;generateBtn.textContent='Generate';}
+    });
+
+    async function regenerateScenario(){
+      const existingScenario=scenarioOutput.value.trim();
+      const comment=revisionComment.value.trim();
+      if(!existingScenario){setStatus('Generate or paste a scenario first.',true);scenarioOutput.focus();return;}
+      if(!comment){setStatus('Enter a comment describing the changes.',true);revisionComment.focus();return;}
+      regenerateBtn.disabled=true;regenerateBtn.textContent='Regenerating...';
+      setStatus('GPT-5.6 Sol is revising the scenario...');
+      try{
+        const response=await fetch(BACKEND_URL+'/generate-scenario',{
+          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({existingScenario,revisionComment:comment})
+        });
+        const data=await response.json();
+        if(!response.ok)throw new Error(data.error||data.details||`HTTP ${response.status}`);
+        scenarioOutput.value=data.scenario||'';
+        setStatus(`Regenerated with ${data.model||'gpt-5.6-sol'}. You can continue commenting.`);
+      }catch(error){setStatus(`Regeneration failed: ${error.message}`,true);}
+      finally{regenerateBtn.disabled=false;regenerateBtn.textContent='Regenerate';}
+    }
+    regenerateBtn.addEventListener('click',regenerateScenario);
+    revisionComment.addEventListener('keydown',event=>{
+      if(event.key==='Enter'){event.preventDefault();regenerateScenario();}
     });
 
     clearBtn.addEventListener('click',()=>{
