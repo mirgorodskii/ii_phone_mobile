@@ -43,6 +43,13 @@
         <button id="resetTemplateBtn">Reset template</button>
       </div>
       <section class="field">
+        <label for="variableListsInput">Variable lists</label>
+        <textarea id="variableListsInput"></textarea>
+      </section>
+      <div class="actions">
+        <button id="resetVariableListsBtn">Reset variable lists</button>
+      </div>
+      <section class="field">
         <label for="rulesInput">Generation rules</label>
         <textarea id="rulesInput" placeholder="Describe the scenario, character, atmosphere, backbone rules, phases, timing, voice, and desired ending..."></textarea>
       </section>
@@ -81,26 +88,137 @@ nudge: optional short trigger; omit the line when unnecessary
 instructions: phase instructions
 
 Repeat ===PHASE=== blocks as needed. Make every phase playable and ensure all user rules are reflected.`;
+    const DEFAULT_VARIABLE_LISTS=`Generative Voice Scenario Variable Lists
+
+1. Scenario Development Approaches
+
+-   Twist in the Middle
+-   Escalation
+-   Role Reversal
+-   Hidden Agenda
+-   Multiple Endings
+-   False Premise
+-   Countdown
+-   Unreliable AI
+-   Memory Reveal
+-   Moral Choice
+
+2. Conversation Opening Approaches
+
+-   Immediate Emergency
+-   Personal Recognition
+-   Interrupted Conversation
+-   Wrong Number
+-   Secret Message
+-   Direct Accusation
+-   Unusual Request
+-   AI Already Knows
+-   Voice from the Future
+-   Voice from the Past
+-   Someone Is Listening
+-   User Has Been Chosen
+-   Confession
+-   Impossible Situation
+-   Silence Then Reaction
+
+3. General Scenario Variables
+
+-   Role of AI
+-   Role of Human
+-   Explicit Goal
+-   Hidden Goal
+-   Type of Conflict
+-   Emotional Arc
+-   Urgency Level
+-   Interactivity Level
+-   Information Revealed
+-   AI Attitude Toward Human
+-   AI Reliability
+-   Choice Mechanic
+-   Cost of Failure
+-   Tone
+-   Realism Level
+-   Tempo
+-   AI Speech Style
+-   Personalization Method
+-   Physical Installation Interaction
+-   Ending Type
+
+4. Ways to Elicit a Response
+
+-   Direct Question
+-   Choice
+-   Request
+-   Confirmation
+-   Explanation
+-   Description
+-   Recall
+-   Prediction
+-   Decision
+-   Advice
+-   Help
+-   Physical Action
+-   Unfinished Sentence
+-   Provocation
+-   Accusation
+-   Intentional Mistake
+-   Personal Address
+-   Comprehension Check
+-   Conditional Response
+-   Riddle
+-   Moral Dilemma
+-   Secret in Exchange
+-   Warning
+-   Silence
+-   Repeat User’s Words
+-   Emotional Reaction
+-   Promise to Continue
+-   Countdown
+-   Give the Turn to the Human
+
+5. Signs This Is Not a Typical AI Conversation
+
+-   Conversation already in progress
+-   Reacts to lifting the handset
+-   AI exists inside the situation
+-   AI needs the human
+-   Impossible source of the call
+-   Strong emotion from the first line
+-   Knows unexpected context
+-   Starts with a rule or prohibition
+-   Refuses the assistant role
+-   First words trigger an irreversible event
+
+6. Six-Phase Command Template
+
+For each phase define: - Visible intention of AI - Hidden dramatic function - Indirect action - New information - AI emotion - Human emotion - Method to elicit response - Transition condition`;
     const templateInput=document.getElementById('templateInput');
+    const variableListsInput=document.getElementById('variableListsInput');
     const rulesInput=document.getElementById('rulesInput');
     const scenarioOutput=document.getElementById('scenarioOutput');
     const generateBtn=document.getElementById('generateBtn');
     const clearBtn=document.getElementById('clearBtn');
     const resetTemplateBtn=document.getElementById('resetTemplateBtn');
+    const resetVariableListsBtn=document.getElementById('resetVariableListsBtn');
     const copyBtn=document.getElementById('copyBtn');
     const downloadBtn=document.getElementById('downloadBtn');
     const status=document.getElementById('status');
     const RULES_STORAGE_KEY='the_phone_generator_rules';
     const TEMPLATE_STORAGE_KEY='the_phone_generator_template';
+    const VARIABLE_LISTS_STORAGE_KEY='the_phone_generator_variable_lists';
 
     function setStatus(message,error=false){status.textContent=message;status.classList.toggle('error',error);}
 
     try{
       rulesInput.value=localStorage.getItem(RULES_STORAGE_KEY)||'';
       templateInput.value=localStorage.getItem(TEMPLATE_STORAGE_KEY)||DEFAULT_TEMPLATE;
-    }catch(error){templateInput.value=DEFAULT_TEMPLATE;}
+      variableListsInput.value=localStorage.getItem(VARIABLE_LISTS_STORAGE_KEY)||DEFAULT_VARIABLE_LISTS;
+    }catch(error){templateInput.value=DEFAULT_TEMPLATE;variableListsInput.value=DEFAULT_VARIABLE_LISTS;}
     templateInput.addEventListener('input',()=>{
       try{localStorage.setItem(TEMPLATE_STORAGE_KEY,templateInput.value);}catch(error){}
+    });
+    variableListsInput.addEventListener('input',()=>{
+      try{localStorage.setItem(VARIABLE_LISTS_STORAGE_KEY,variableListsInput.value);}catch(error){}
     });
     rulesInput.addEventListener('input',()=>{
       try{localStorage.setItem(RULES_STORAGE_KEY,rulesInput.value);}catch(error){}
@@ -109,13 +227,14 @@ Repeat ===PHASE=== blocks as needed. Make every phase playable and ensure all us
     generateBtn.addEventListener('click',async()=>{
       const rules=rulesInput.value.trim();
       const templatePrompt=templateInput.value.trim();
+      const variableLists=variableListsInput.value.trim();
       if(!rules){setStatus('Enter generation rules first.',true);rulesInput.focus();return;}
       if(!templatePrompt){setStatus('Template prompt cannot be empty.',true);templateInput.focus();return;}
       generateBtn.disabled=true;generateBtn.textContent='Generating...';
       setStatus('GPT-5.6 Sol is generating the scenario...');
       try{
         const response=await fetch(BACKEND_URL+'/generate-scenario',{
-          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rules,templatePrompt})
+          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rules,templatePrompt,variableLists})
         });
         const data=await response.json();
         if(!response.ok)throw new Error(data.error||data.details||`HTTP ${response.status}`);
@@ -134,6 +253,11 @@ Repeat ===PHASE=== blocks as needed. Make every phase playable and ensure all us
       templateInput.value=DEFAULT_TEMPLATE;
       try{localStorage.setItem(TEMPLATE_STORAGE_KEY,DEFAULT_TEMPLATE);}catch(error){}
       setStatus('Template prompt restored.');templateInput.focus();
+    });
+    resetVariableListsBtn.addEventListener('click',()=>{
+      variableListsInput.value=DEFAULT_VARIABLE_LISTS;
+      try{localStorage.setItem(VARIABLE_LISTS_STORAGE_KEY,DEFAULT_VARIABLE_LISTS);}catch(error){}
+      setStatus('Variable lists restored.');variableListsInput.focus();
     });
     copyBtn.addEventListener('click',async()=>{
       if(!scenarioOutput.value.trim()){setStatus('Nothing to copy.',true);return;}
