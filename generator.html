@@ -64,8 +64,14 @@
     const copyBtn=document.getElementById('copyBtn');
     const downloadBtn=document.getElementById('downloadBtn');
     const status=document.getElementById('status');
+    const RULES_STORAGE_KEY='the_phone_generator_rules';
 
     function setStatus(message,error=false){status.textContent=message;status.classList.toggle('error',error);}
+
+    try{rulesInput.value=localStorage.getItem(RULES_STORAGE_KEY)||'';}catch(error){}
+    rulesInput.addEventListener('input',()=>{
+      try{localStorage.setItem(RULES_STORAGE_KEY,rulesInput.value);}catch(error){}
+    });
 
     generateBtn.addEventListener('click',async()=>{
       const rules=rulesInput.value.trim();
@@ -84,7 +90,11 @@
       finally{generateBtn.disabled=false;generateBtn.textContent='Generate';}
     });
 
-    clearBtn.addEventListener('click',()=>{rulesInput.value='';scenarioOutput.value='';setStatus('Model: GPT-5.6 Sol');rulesInput.focus();});
+    clearBtn.addEventListener('click',()=>{
+      rulesInput.value='';scenarioOutput.value='';
+      try{localStorage.removeItem(RULES_STORAGE_KEY);}catch(error){}
+      setStatus('Model: GPT-5.6 Sol');rulesInput.focus();
+    });
     copyBtn.addEventListener('click',async()=>{
       if(!scenarioOutput.value.trim()){setStatus('Nothing to copy.',true);return;}
       try{await navigator.clipboard.writeText(scenarioOutput.value);setStatus('Scenario copied.');}
