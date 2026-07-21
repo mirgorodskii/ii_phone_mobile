@@ -14,6 +14,13 @@
     main{display:flex;flex-direction:column;gap:14px;padding:14px;flex:1}
     .field{display:flex;flex-direction:column;gap:7px;flex:1}
     label{font-size:11px;color:#777;letter-spacing:1px;text-transform:uppercase}
+    .field-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .field-toggle{display:flex;align-items:center;gap:7px;color:#777;font-size:10px;letter-spacing:1px;text-transform:uppercase;cursor:pointer}
+    .field-toggle input{appearance:none;width:30px;height:17px;margin:0;border:1px solid #444;border-radius:10px;background:#171717;position:relative;cursor:pointer}
+    .field-toggle input:before{content:'';position:absolute;width:11px;height:11px;left:2px;top:2px;border-radius:50%;background:#555;transition:.15s}
+    .field-toggle input:checked{border-color:#777}
+    .field-toggle input:checked:before{left:15px;background:#bbb}
+    .field.inactive textarea{opacity:.45}
     textarea{width:100%;flex:1;min-height:300px;padding:12px;border:1px solid #333;border-radius:6px;font-family:'Courier New',monospace;font-size:16px;line-height:1.7;resize:vertical;background:#0a0a0a;color:#fff;outline:none}
     textarea:focus{border-color:#555}
     textarea::placeholder{color:#444}
@@ -40,14 +47,14 @@
     </header>
     <main>
       <section class="field">
-        <label for="templateInput">Template prompt</label>
+        <div class="field-heading"><label for="templateInput">Template prompt</label><label class="field-toggle"><input type="checkbox" data-field-toggle="template" checked><span>Use</span></label></div>
         <textarea id="templateInput"></textarea>
       </section>
       <div class="actions">
         <button id="resetTemplateBtn">Reset template</button>
       </div>
       <section class="field">
-        <label for="variableListsInput">Variable lists</label>
+        <div class="field-heading"><label for="variableListsInput">Variable lists</label><label class="field-toggle"><input type="checkbox" data-field-toggle="variables" checked><span>Use</span></label></div>
         <textarea id="variableListsInput"></textarea>
       </section>
       <div class="variable-controls" id="variableControls"></div>
@@ -55,8 +62,12 @@
         <button id="resetVariableListsBtn">Reset variable lists</button>
       </div>
       <section class="field">
-        <label for="rulesInput">Generation rules</label>
+        <div class="field-heading"><label for="rulesInput">Generation rules</label><label class="field-toggle"><input type="checkbox" data-field-toggle="rules" checked><span>Use</span></label></div>
         <textarea id="rulesInput" placeholder="Describe the scenario, character, atmosphere, backbone rules, phases, timing, voice, and desired ending..."></textarea>
+      </section>
+      <section class="field">
+        <div class="field-heading"><label for="exampleInput">Reference scenario</label><label class="field-toggle"><input type="checkbox" data-field-toggle="example"><span>Use</span></label></div>
+        <textarea id="exampleInput" placeholder="Paste an example scenario here. It will be used as a reference for length and level of detail..."></textarea>
       </section>
       <div class="actions">
         <button id="generateBtn">Generate</button>
@@ -201,6 +212,7 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
     const variableListsInput=document.getElementById('variableListsInput');
     const variableControls=document.getElementById('variableControls');
     const rulesInput=document.getElementById('rulesInput');
+    const exampleInput=document.getElementById('exampleInput');
     const scenarioOutput=document.getElementById('scenarioOutput');
     const generateBtn=document.getElementById('generateBtn');
     const clearBtn=document.getElementById('clearBtn');
@@ -213,8 +225,26 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
     const TEMPLATE_STORAGE_KEY='the_phone_generator_template';
     const VARIABLE_LISTS_STORAGE_KEY='the_phone_generator_variable_lists';
     const VARIABLE_SELECTIONS_STORAGE_KEY='the_phone_generator_variable_selections';
+    const EXAMPLE_STORAGE_KEY='the_phone_generator_example';
+    const FIELD_TOGGLES_STORAGE_KEY='the_phone_generator_field_toggles';
 
     function setStatus(message,error=false){status.textContent=message;status.classList.toggle('error',error);}
+
+    function readFieldToggles(){
+      const defaults={template:true,variables:true,rules:true,example:false};
+      try{return {...defaults,...JSON.parse(localStorage.getItem(FIELD_TOGGLES_STORAGE_KEY)||'{}')};}
+      catch(error){return defaults;}
+    }
+
+    function saveFieldToggles(){
+      const values={};
+      document.querySelectorAll('[data-field-toggle]').forEach(toggle=>{
+        values[toggle.dataset.fieldToggle]=toggle.checked;
+        toggle.closest('.field').classList.toggle('inactive',!toggle.checked);
+      });
+      try{localStorage.setItem(FIELD_TOGGLES_STORAGE_KEY,JSON.stringify(values));}catch(error){}
+      return values;
+    }
 
     function parseVariableLists(text){
       const lists=[];let current=null;
@@ -262,7 +292,14 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
       rulesInput.value=localStorage.getItem(RULES_STORAGE_KEY)||'';
       templateInput.value=localStorage.getItem(TEMPLATE_STORAGE_KEY)||DEFAULT_TEMPLATE;
       variableListsInput.value=localStorage.getItem(VARIABLE_LISTS_STORAGE_KEY)||DEFAULT_VARIABLE_LISTS;
+      exampleInput.value=localStorage.getItem(EXAMPLE_STORAGE_KEY)||'';
     }catch(error){templateInput.value=DEFAULT_TEMPLATE;variableListsInput.value=DEFAULT_VARIABLE_LISTS;}
+    const savedFieldToggles=readFieldToggles();
+    document.querySelectorAll('[data-field-toggle]').forEach(toggle=>{
+      toggle.checked=savedFieldToggles[toggle.dataset.fieldToggle];
+      toggle.addEventListener('change',saveFieldToggles);
+    });
+    saveFieldToggles();
     templateInput.addEventListener('input',()=>{
       try{localStorage.setItem(TEMPLATE_STORAGE_KEY,templateInput.value);}catch(error){}
     });
@@ -274,19 +311,30 @@ For each phase define: - Visible intention of AI - Hidden dramatic function - In
     rulesInput.addEventListener('input',()=>{
       try{localStorage.setItem(RULES_STORAGE_KEY,rulesInput.value);}catch(error){}
     });
+    exampleInput.addEventListener('input',()=>{
+      try{localStorage.setItem(EXAMPLE_STORAGE_KEY,exampleInput.value);}catch(error){}
+    });
 
     generateBtn.addEventListener('click',async()=>{
       const rules=rulesInput.value.trim();
       const templatePrompt=templateInput.value.trim();
       const variableLists=variableListsInput.value.trim();
       const variableSelections=saveVariableSelections();
-      if(!rules){setStatus('Enter generation rules first.',true);rulesInput.focus();return;}
-      if(!templatePrompt){setStatus('Template prompt cannot be empty.',true);templateInput.focus();return;}
+      const referenceScenario=exampleInput.value.trim();
+      const enabled=saveFieldToggles();
+      if(enabled.rules&&!rules){setStatus('Enter generation rules or turn that field off.',true);rulesInput.focus();return;}
+      if(enabled.template&&!templatePrompt){setStatus('Enter a template prompt or turn that field off.',true);templateInput.focus();return;}
+      if(enabled.example&&!referenceScenario){setStatus('Add a reference scenario or turn that field off.',true);exampleInput.focus();return;}
       generateBtn.disabled=true;generateBtn.textContent='Generating...';
       setStatus('GPT-5.6 Sol is generating the scenario...');
       try{
+        const payload={};
+        if(enabled.rules)payload.rules=rules;
+        if(enabled.template)payload.templatePrompt=templatePrompt;
+        if(enabled.variables){payload.variableLists=variableLists;payload.variableSelections=variableSelections;}
+        if(enabled.example)payload.referenceScenario=referenceScenario;
         const response=await fetch(BACKEND_URL+'/generate-scenario',{
-          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rules,templatePrompt,variableLists,variableSelections})
+          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
         });
         const data=await response.json();
         if(!response.ok)throw new Error(data.error||data.details||`HTTP ${response.status}`);
