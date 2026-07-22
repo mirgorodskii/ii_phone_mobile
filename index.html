@@ -558,7 +558,7 @@ let vadThreshold=0.5,vadSilenceDuration=2500,speechGateThreshold=0.015,noiseGate
 let conversationLog=[],currentSessionStartTime=null;
 let autoGoOnTimer=null,lastResponseNeedsLongPause=false;
 const AUTO_GO_ON_DELAY_WITH_QUESTION=20000;
-const AUTO_GO_ON_DELAY_NO_QUESTION=6000;
+const AUTO_GO_ON_DELAY_NO_QUESTION=4000;
 
 function responseNeedsLongPause(text){
   return /\?|\b(?:describe|tell me|continue|your turn)\b/i.test(text||'');
