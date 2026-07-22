@@ -554,8 +554,10 @@ let currentText='',currentMessageDiv=null;
 let audioQueue=[],isPlaying=false,scheduledSourceNodes=[],audioPlaybackStartTime=0;
 let mediaStream=null,audioWorkletNode=null,isRecording=false;
 let isAISpeaking=false,isAudioPlaying=false,isFirstInteraction=true,isSpeechActive=false;
-let bargeInActive=false;
+let bargeInFrames=0,bargeInActive=false;
 const BARGE_IN_ENABLED=true;
+const BARGE_IN_THRESHOLD=0.045;
+const BARGE_IN_CONFIRM_FRAMES=4;
 let vadThreshold=0.5,vadSilenceDuration=2500,speechGateThreshold=0.015,noiseGateThreshold=0.003;
 let conversationLog=[],currentSessionStartTime=null;
 let autoGoOnTimer=null,lastResponseNeedsLongPause=false;
@@ -776,6 +778,7 @@ async function connectRealtime(){
           audioQueue.push(data.delta);if(!isPlaying){isPlaying=true;playAudioQueue();}
         }else if(data.type==='response.done'){
           bargeInActive=false;
+          bargeInFrames=0;
           if(currentMessageDiv&&currentText){updateMessage(currentMessageDiv,currentText);logMessage('assistant',currentText);}
           lastResponseNeedsLongPause=responseNeedsLongPause(currentText);
           currentText='';currentMessageDiv=null;aiResponseCount++;currentPhaseResponseCount++;
@@ -896,8 +899,14 @@ async function startRecording(){
       const ratio=audioContext.sampleRate/24000;
       const out=new Float32Array(Math.floor(inp.length/ratio));
       for(let i=0;i<out.length;i++)out[i]=inp[Math.floor(i*ratio)];
-      if(!isSpeechActive){if(rms>=speechGateThreshold)isSpeechActive=true;else for(let i=0;i<out.length;i++)out[i]=0;}
-      else if(rms<noiseGateThreshold){for(let i=0;i<out.length;i++)out[i]=0;}
+      if(aiSpeaking){
+        bargeInFrames=rms>=Math.max(speechGateThreshold,BARGE_IN_THRESHOLD)?bargeInFrames+1:0;
+        if(bargeInFrames<BARGE_IN_CONFIRM_FRAMES){for(let i=0;i<out.length;i++)out[i]=0;}
+      }else{
+        bargeInFrames=0;
+        if(!isSpeechActive){if(rms>=speechGateThreshold)isSpeechActive=true;else for(let i=0;i<out.length;i++)out[i]=0;}
+        else if(rms<noiseGateThreshold){for(let i=0;i<out.length;i++)out[i]=0;}
+      }
       chunks.push(out);
       const now=Date.now();
       if(now-lastSend>=100&&chunks.length>0){
