@@ -559,6 +559,19 @@ let conversationLog=[],currentSessionStartTime=null;
 let autoGoOnTimer=null,lastResponseNeedsLongPause=false;
 const AUTO_GO_ON_DELAY_WITH_QUESTION=20000;
 const AUTO_GO_ON_DELAY_NO_QUESTION=4000;
+const RESPONSE_TRIGGERS=[
+  /\?/,
+  /\b(?:describe|tell me|answer|choose|remember|imagine|name|say|decide|explain|continue|your turn)\b/i,
+  /\b(?:please\s+)?(?:say|choose|answer|name|explain)\b/i,
+  /\b(?:do you|would you|can you)\b/i,
+  /(?:^|[.!?]\s*)(?:which|what|where|when|who|why|how)\b/i,
+  /(?:^|[\s.!?])(?:расскажи|ответь|выбери|помнишь|представь|назови|скажи|реши|объясни|продолжи|твой ход)(?=$|[\s,.:;!?])/i,
+  /(?:^|[.!?]\s*)(?:что|где|когда|кто|почему|как|можешь ли|хочешь ли)(?=$|[\s,.:;!?])/i
+];
+
+function responseNeedsLongPause(text){
+  return RESPONSE_TRIGGERS.some(pattern=>pattern.test(text||''));
+}
 
 function resetAutoGoOnTimer(){
   if(autoGoOnTimer){clearTimeout(autoGoOnTimer);autoGoOnTimer=null;}
@@ -760,7 +773,7 @@ async function connectRealtime(){
           audioQueue.push(data.delta);if(!isPlaying){isPlaying=true;playAudioQueue();}
         }else if(data.type==='response.done'){
           if(currentMessageDiv&&currentText){updateMessage(currentMessageDiv,currentText);logMessage('assistant',currentText);}
-          lastResponseNeedsLongPause=currentText.includes('?')||currentText.toLowerCase().includes('describe');
+          lastResponseNeedsLongPause=responseNeedsLongPause(currentText);
           currentText='';currentMessageDiv=null;aiResponseCount++;currentPhaseResponseCount++;
           if(isFinalMessageSent){setTimeout(()=>disconnect(),1500);return;}
           if(performancePhases.length>0){const cur=performancePhases[currentPhaseIndex];if(currentPhaseResponseCount>=cur.duration)setTimeout(()=>switchToNextPhase(),500);}
