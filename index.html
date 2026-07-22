@@ -554,6 +554,10 @@ let currentText='',currentMessageDiv=null;
 let audioQueue=[],isPlaying=false,scheduledSourceNodes=[],audioPlaybackStartTime=0;
 let mediaStream=null,audioWorkletNode=null,isRecording=false;
 let isAISpeaking=false,isAudioPlaying=false,isFirstInteraction=true,isSpeechActive=false;
+let bargeInFrames=0,bargeInActive=false;
+const BARGE_IN_ENABLED=true;
+const BARGE_IN_THRESHOLD=0.045;
+const BARGE_IN_CONFIRM_FRAMES=4;
 let vadThreshold=0.5,vadSilenceDuration=2500,speechGateThreshold=0.015,noiseGateThreshold=0.003;
 let conversationLog=[],currentSessionStartTime=null;
 let autoGoOnTimer=null,lastResponseNeedsLongPause=false;
@@ -748,6 +752,15 @@ async function connectRealtime(){
           else if(!ws._txTimeout){ws._txTimeout=setTimeout(()=>{updateMessage(currentMessageDiv,currentText);ws._txTimeout=null;},50);}
         }else if(data.type==='input_audio_buffer.speech_started'){
           resetAutoGoOnTimer();
+          if(BARGE_IN_ENABLED&&(isAISpeaking||isAudioPlaying)){
+            if(currentMessageDiv&&currentText&&!currentMessageDiv.classList.contains('user')){
+              updateMessage(currentMessageDiv,currentText);
+              logMessage('assistant',currentText);
+              currentText='';currentMessageDiv=null;
+            }
+            bargeInActive=true;
+            interruptAssistantPlayback();
+          }
           isSpeechActive=true;
           if(!currentMessageDiv)currentMessageDiv=addMessage('user','🎤');
         }else if(data.type==='input_audio_buffer.speech_stopped'){
@@ -757,12 +770,15 @@ async function connectRealtime(){
           if(currentMessageDiv&&currentMessageDiv.classList.contains('user')){updateMessage(currentMessageDiv,transcript);logMessage('user',transcript);}
           currentMessageDiv=null;isSpeechActive=false;
         }else if(data.type==='response.audio.delta'||data.type==='response.output_audio.delta'){
+          if(bargeInActive)return;
           resetAutoGoOnTimer();
           if(!isAISpeaking){isAISpeaking=true;isSpeechActive=false;}
           isAudioPlaying=true;setOverlayState('speaking');
           updateStatus('AI speaking',true);audioIndicator.classList.remove('hidden');
           audioQueue.push(data.delta);if(!isPlaying){isPlaying=true;playAudioQueue();}
         }else if(data.type==='response.done'){
+          bargeInActive=false;
+          bargeInFrames=0;
           if(currentMessageDiv&&currentText){updateMessage(currentMessageDiv,currentText);logMessage('assistant',currentText);}
           lastResponseNeedsLongPause=responseNeedsLongPause(currentText);
           currentText='';currentMessageDiv=null;aiResponseCount++;currentPhaseResponseCount++;
@@ -796,6 +812,15 @@ function createTelephoneFilter(ctx){
   const mb=ctx.createBiquadFilter();mb.type='peaking';mb.frequency.value=1200;mb.Q.value=1.5;mb.gain.value=3;
   hp.connect(mb);mb.connect(lp);return{input:hp,output:lp};
 }
+function interruptAssistantPlayback(){
+  isPlaying=false;isAudioPlaying=false;isAISpeaking=false;
+  audioQueue=[];audioPlaybackStartTime=0;
+  const queued=scheduledSourceNodes;scheduledSourceNodes=[];
+  queued.forEach(source=>{try{source.stop()}catch(e){}});
+  audioIndicator.classList.add('hidden');
+  setOverlayState('recording');
+  updateStatus('Listening — AI interrupted',true);
+}
 async function playAudioQueue(){
   if(!playbackAudioContext){playbackAudioContext=new(window.AudioContext||window.webkitAudioContext)();audioPlaybackStartTime=playbackAudioContext.currentTime;telephoneFilter=createTelephoneFilter(playbackAudioContext);telephoneFilter.output.connect(playbackAudioContext.destination);}
   while(audioQueue.length>0){
@@ -812,7 +837,9 @@ async function playAudioQueue(){
       src.start(t);audioPlaybackStartTime=t+buf.duration;
       scheduledSourceNodes.push(src);
       src.onended=()=>{
-        scheduledSourceNodes.splice(scheduledSourceNodes.indexOf(src),1);
+        const sourceIndex=scheduledSourceNodes.indexOf(src);
+        if(sourceIndex>=0)scheduledSourceNodes.splice(sourceIndex,1);
+        if(!isPlaying)return;
         if(scheduledSourceNodes.length===0&&audioQueue.length===0){
           isPlaying=false;isAudioPlaying=false;audioIndicator.classList.add('hidden');audioPlaybackStartTime=0;
           setTimeout(()=>{isAISpeaking=false;if(isConnected){setOverlayState('recording');updateStatus('Connected',true);}},300);
@@ -865,14 +892,21 @@ async function startRecording(){
     let chunks=[],lastSend=0;
     proc.onaudioprocess=e=>{
       if(!isRecording||!ws||ws.readyState!==WebSocket.OPEN)return;
-      if(isAISpeaking||isAudioPlaying)return;
+      const aiSpeaking=isAISpeaking||isAudioPlaying;
+      if(aiSpeaking&&!BARGE_IN_ENABLED)return;
       const inp=e.inputBuffer.getChannelData(0);
       const rms=calcRMS(inp);updateAudioLevel(rms);
       const ratio=audioContext.sampleRate/24000;
       const out=new Float32Array(Math.floor(inp.length/ratio));
       for(let i=0;i<out.length;i++)out[i]=inp[Math.floor(i*ratio)];
-      if(!isSpeechActive){if(rms>=speechGateThreshold)isSpeechActive=true;else for(let i=0;i<out.length;i++)out[i]=0;}
-      else{if(rms<noiseGateThreshold)for(let i=0;i<out.length;i++)out[i]=0;}
+      if(aiSpeaking){
+        bargeInFrames=rms>=Math.max(speechGateThreshold,BARGE_IN_THRESHOLD)?bargeInFrames+1:0;
+        if(bargeInFrames<BARGE_IN_CONFIRM_FRAMES){for(let i=0;i<out.length;i++)out[i]=0;}
+      }else{
+        bargeInFrames=0;
+        if(!isSpeechActive){if(rms>=speechGateThreshold)isSpeechActive=true;else for(let i=0;i<out.length;i++)out[i]=0;}
+        else if(rms<noiseGateThreshold){for(let i=0;i<out.length;i++)out[i]=0;}
+      }
       chunks.push(out);
       const now=Date.now();
       if(now-lastSend>=100&&chunks.length>0){
